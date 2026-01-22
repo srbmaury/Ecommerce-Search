@@ -9,8 +9,10 @@ from utils.data_paths import get_data_path
 
 bp = Blueprint("events", __name__)
 
-@bp.route("/event", methods=["POST"])
+@bp.route("/event", methods=["POST", "OPTIONS"])
 def log_event():
+    if request.method == "OPTIONS":
+        return "", 200
     data = request.json or {}
     timestamp = datetime.now().isoformat()
 
