@@ -1,6 +1,5 @@
 import { useState } from 'react';
-
-const API_BASE_URL = 'http://localhost:5000';
+import API_BASE_URL from './config';
 
 async function logEvent(eventType, productId, query, userId) {
     try {
