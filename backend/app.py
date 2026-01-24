@@ -6,12 +6,12 @@ from dotenv import load_dotenv
 from backend.config import configure_cors
 from backend.scheduler import start_scheduler
 
-from backend.routes.auth import bp as auth_bp
-from backend.routes.search import bp as search_bp
-from backend.routes.events import bp as events_bp
-from backend.routes.cart import bp as cart_bp
-from backend.routes.analytics import bp as analytics_bp
-from backend.routes.recommendations import bp as rec_bp
+from backend.routes.auth_routes import bp as auth_bp
+from backend.routes.search_routes import bp as search_bp
+from backend.routes.events_routes import bp as events_bp
+from backend.routes.cart_routes import bp as cart_bp
+from backend.routes.analytics_routes import bp as analytics_bp
+from backend.routes.recommendations_routes import bp as rec_bp
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)

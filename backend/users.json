@@ -2,225 +2,609 @@
   {
     "user_id": "u1",
     "username": "testuser1",
-    "password": "$2b$12$Ful9wTp3JwZGaQgbrA27ZOXujwLBgK698RE6wMax/9IcBOmo0Mvau",
+    "password": "$2b$12$eDzZ68ezzA5yV0lX5goFLObQmRyQrdCkJ9giKOJ4iYXBwRUZyyzCa",
     "group": "B",
+    "cart": [
+      "103583",
+      "104635",
+      "107322",
+      "105365",
+      "100646",
+      "109014",
+      "105784",
+      "105597",
+      "106868",
+      "109758",
+      "100653",
+      "103606"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u2",
     "username": "testuser2",
-    "password": "$2b$12$EByXaJye4BBuzpMiAO8kwec.Qc5V5KPfKaCp/zDbh79VQ5.NliLLG",
+    "password": "$2b$12$GVd0p46jlioyi18nvN95AOdbqtWw3GWnEqhPGrbcoDHBEtCiiEKYu",
     "group": "B",
-    "cluster": 0
+    "cart": [
+      "101630",
+      "108762",
+      "106214",
+      "104251",
+      "102760",
+      "103461",
+      "100083",
+      "107772"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u3",
     "username": "testuser3",
-    "password": "$2b$12$WeQidcBkq245.QfiwdmwF.J.i24UemZcCBxqxaY4.6QLd10HVUqK6",
-    "group": "B",
-    "cluster": 1
+    "password": "$2b$12$rRT5mSV8FTa39VlGlw4ByOHEGw7RWTk8ShVUn1j0rftaCn/i2dGdK",
+    "group": "A",
+    "cart": [
+      "108514",
+      "102407",
+      "102542",
+      "108700",
+      "101218",
+      "105372",
+      "106643",
+      "108832",
+      "104909",
+      "101632"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u4",
     "username": "testuser4",
-    "password": "$2b$12$a8Xuua/K9m9Sw8NU5N6baehF/84t5i14cDyhm1N8tYC9Xj/LdTP5a",
+    "password": "$2b$12$p1ixohAtdBsZ2jUVRVr8o..jReq/tJ7YTCjWwa5UW5lPXnH3D1XBe",
     "group": "A",
-    "cluster": 0
+    "cart": [
+      "100684",
+      "109167",
+      "100714",
+      "108588",
+      "101498",
+      "102735",
+      "101277",
+      "104653",
+      "103147",
+      "101878"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u5",
     "username": "testuser5",
-    "password": "$2b$12$3n4.Z4.7FfGp9ihai3YcseTwx/y4boC1vQYuosHqV.q7DckFAR9PC",
+    "password": "$2b$12$w1cfBvxZBjz0HxDOU2pWwO2bx0zWBZ1npUj3TKbdXNNlq2SXZEHL6",
     "group": "A",
+    "cart": [
+      "109509",
+      "103077",
+      "105094",
+      "106538",
+      "106316",
+      "102015",
+      "107215",
+      "107977",
+      "108904",
+      "101837",
+      "108527",
+      "109948",
+      "107322",
+      "106007",
+      "107668",
+      "102562"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u6",
     "username": "testuser6",
-    "password": "$2b$12$.HYu4iGWYrEBcavsYVFmuOP7s1f1trlm.r4kvQBruPIrhj/LnglUW",
+    "password": "$2b$12$HUdb0LLzD4gT4EK3W9pTAOvRshXXqpNjBKnRhecHSR7PBg1uvwSQS",
     "group": "B",
-    "cluster": 2
+    "cart": [
+      "108419",
+      "100016",
+      "104022",
+      "103345",
+      "107353",
+      "103286",
+      "103554",
+      "102089",
+      "101309"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u7",
     "username": "testuser7",
-    "password": "$2b$12$xS1pz5My8iWzcgioVVNqiuijbGkzCifCtRcxhKFOXy.s81R3u07yW",
+    "password": "$2b$12$fWbLN6yRydzXHtbNV52gsO0JL8Z/Z9xPo28koJWgOtqiFpQD8Bism",
     "group": "A",
-    "cluster": 2
+    "cart": [
+      "102252",
+      "103657",
+      "101415",
+      "102167",
+      "105269",
+      "100460",
+      "107296",
+      "101888",
+      "108525",
+      "106893",
+      "105665"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u8",
     "username": "testuser8",
-    "password": "$2b$12$9Mn5ZxQxiYLo4LGfsdJ1yuRjtG6jzPTnl49yCK0gbgLlWk/zKZ0zm",
+    "password": "$2b$12$ymp0lUNcFPJI4Y/z.JCIn.ym7g2JYgwoKHw3q9dn8.KAKGuz1/8Y2",
     "group": "B",
+    "cart": [
+      "104155",
+      "105496",
+      "100733",
+      "105366",
+      "103374",
+      "109229",
+      "106763",
+      "100746",
+      "102741",
+      "102951",
+      "107836",
+      "109223",
+      "101652",
+      "101904",
+      "100166",
+      "104863",
+      "104302",
+      "108472"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u9",
     "username": "testuser9",
-    "password": "$2b$12$ft2/ND.3vZTAXu0fnW.PV.fc5F.badJHcfREye06SO3UevYHe0UnO",
+    "password": "$2b$12$nRaQCRxVzLJwHIxn/zSHIOQkUNj1LOJ8BtKhhElH3sA4Mzq47hJ6y",
     "group": "A",
+    "cart": [
+      "100048",
+      "109443",
+      "109268",
+      "108376",
+      "108290",
+      "104825",
+      "103036",
+      "103001"
+    ],
     "cluster": 2
   },
   {
     "user_id": "u10",
     "username": "testuser10",
-    "password": "$2b$12$L3PIjXfXL0tyc4fGUfDEMOlZh8CcdR8GVhg5ntQTqnJvz1Vs8497S",
-    "group": "B",
-    "cluster": 2
+    "password": "$2b$12$EbjIJg3P8jH6.T3ILNT22.HmvUK3Yy/VwOSuE/qSAnd.cXFf/saVO",
+    "group": "A",
+    "cart": [
+      "107924",
+      "106387",
+      "101862",
+      "105129",
+      "107262",
+      "106483",
+      "106637",
+      "106876",
+      "105844",
+      "105420",
+      "100759"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u11",
     "username": "testuser11",
-    "password": "$2b$12$qbM2QZhe9yR.yCuR2OROOeWjm8XxeCUw47.GyVlscxexnA6oCmnae",
-    "group": "B",
-    "cluster": 1
+    "password": "$2b$12$Y.thnmMXaXS2inREVnVEpeDU8BcJRulINtGVULldZ0.S2Wi.vqK8K",
+    "group": "A",
+    "cart": [
+      "102939",
+      "102270",
+      "100445",
+      "101781",
+      "104006",
+      "107177",
+      "103042",
+      "107291",
+      "100810",
+      "100086",
+      "105905",
+      "101354",
+      "108686",
+      "109529",
+      "108965"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u12",
     "username": "testuser12",
-    "password": "$2b$12$tcbevNhXA.60XRqY0DaBxO7ZaDD9uvwxN4pwwfC3GXBpGUfmVDTcK",
+    "password": "$2b$12$UROBHO.MbZzYC1DOXScPUe5gAUBT6H4w40jil4C/9zMglUHbki/ES",
     "group": "A",
+    "cart": [
+      "104052",
+      "100863",
+      "107321",
+      "103235",
+      "109792",
+      "106465",
+      "103854",
+      "108154",
+      "100467",
+      "105836",
+      "102068",
+      "100038",
+      "108200",
+      "107280",
+      "105938",
+      "100795",
+      "105750"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u13",
     "username": "testuser13",
-    "password": "$2b$12$U48D4pVERuSXhe3xT9rTquvns.KOMt/TQZuSd5tq6DPmXw6TSt3a.",
-    "group": "B",
-    "cluster": 2
+    "password": "$2b$12$qFGP.Tdz4a9P1tK7z823xOB64f0DEK1pNGRF5HvZbjhkMJjirV8uS",
+    "group": "A",
+    "cart": [
+      "101872",
+      "104820",
+      "109455",
+      "101416",
+      "104638",
+      "104573",
+      "105721",
+      "109358",
+      "100572",
+      "105040",
+      "108817",
+      "103413",
+      "109369",
+      "109317",
+      "107419"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u14",
     "username": "testuser14",
-    "password": "$2b$12$UI/OV1elLeyoroGt36qkXui3sZw6pxy9FJ8MXaGAbx6F2MSAMIvrO",
-    "group": "B",
-    "cluster": 2
+    "password": "$2b$12$cTNvU0V/EgsY7Br5Qmv9cutX6QwicayHMO5mefy291G3v32u95puO",
+    "group": "A",
+    "cart": [
+      "102981",
+      "100420",
+      "105945",
+      "103461",
+      "100156",
+      "108701",
+      "103479",
+      "106710",
+      "109320",
+      "101032",
+      "109237",
+      "109030",
+      "103622",
+      "105243"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u15",
     "username": "testuser15",
-    "password": "$2b$12$l7RoheZ3wVttBVpW7kQjkucqks8QSJUR6Y/dhspNxqMkU5wz/3BYy",
-    "group": "B",
-    "cluster": 0
+    "password": "$2b$12$d2W59RIQo8.6j.9Jr0S5wuTCwWZlYfoMNwZQ2onKxkUlqAiV8KbSW",
+    "group": "A",
+    "cart": [
+      "108398",
+      "108862",
+      "100991",
+      "109548",
+      "107490",
+      "109122",
+      "100462",
+      "105115",
+      "105430",
+      "106674"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u16",
     "username": "testuser16",
-    "password": "$2b$12$Vtd2Ioye/q8ZUrTBi5L48usc8oHfjr1YINwlHiDcPdwK.E9juteF2",
+    "password": "$2b$12$oUi6M1ay2WqFlBzO.DazpOodwP2vjNgtGap6L2qwuleBNnGtpCa4C",
     "group": "A",
+    "cart": [
+      "104981",
+      "106555",
+      "104730",
+      "102585",
+      "104995",
+      "105355",
+      "105467",
+      "106917",
+      "109659",
+      "103657"
+    ],
     "cluster": 2
   },
   {
     "user_id": "u17",
     "username": "testuser17",
-    "password": "$2b$12$JjxxC19Cz.K0CCC3484irO9wLOBKxmKhRCzdefCmryNg1X3XKiAQ.",
+    "password": "$2b$12$Hfq1/gfj12lfKNJWxtlFN.OWZJolN2R4vd/wFqUxfSkAcfoqYabMK",
     "group": "B",
-    "cluster": 0
+    "cart": [
+      "101133",
+      "104019",
+      "103281",
+      "103060",
+      "105313",
+      "105170",
+      "106777",
+      "101624"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u18",
     "username": "testuser18",
-    "password": "$2b$12$f5KX3Aib3ko47869JBbtz.DN.FRMHjPyIunAiC.Df28dkAyU7xnx.",
+    "password": "$2b$12$kdTl3PyPz0QeLaRdHaxwkOVdVH5zmq.4nsOWYAIfAN6XGLsKFoHKe",
     "group": "B",
-    "cluster": 2
+    "cart": [
+      "106899",
+      "101261",
+      "101829",
+      "105565",
+      "104729",
+      "108438",
+      "101641",
+      "105420"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u19",
     "username": "testuser19",
-    "password": "$2b$12$syV0VBRCPnarN1P/nXqluuZLgIVbco2HQHECDYLMeBuNu16sZskj.",
+    "password": "$2b$12$xLjwEgK4biVibPBeimGfy.gxDpPUqyF7zsrIWW0xINHLoHocd6whO",
     "group": "B",
+    "cart": [
+      "103287",
+      "108470",
+      "103036",
+      "107194",
+      "106265",
+      "102093",
+      "104663",
+      "109750",
+      "105882",
+      "101041"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u20",
     "username": "testuser20",
-    "password": "$2b$12$Sr2W9rNrOp9tVDui05yTWOwWwkzNWWoJJhuEAHlBJmbWnWThK.pm6",
+    "password": "$2b$12$CR9jx3gMhlbge3mKWgLBg.fBPLQUP6BBgPebRT2kt4FnnixCbRHDG",
     "group": "A",
-    "cluster": 2
+    "cart": [
+      "105082",
+      "104984",
+      "105859",
+      "100357",
+      "108033",
+      "102922",
+      "105468",
+      "105965",
+      "104093",
+      "106615",
+      "107270",
+      "105513"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u21",
     "username": "testuser21",
-    "password": "$2b$12$9SKcWr7gpsqn0PIi2cKAYewlxcxTFbneNn3mNoC.TvxDJLsiZ3OnO",
+    "password": "$2b$12$XKernaMhOV7yyZKPouImc.7nLSc8mGVUldK2aoNtdbNxgcrykTlDa",
     "group": "B",
-    "cluster": 2
+    "cart": [
+      "100174",
+      "107681",
+      "100285",
+      "100009",
+      "101931",
+      "102817",
+      "101710",
+      "103154"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u22",
-    "username": "ksaumaury",
-    "password": "$2b$12$KnOJ2nPWGvwF5n2mQ/8DdeqlUN3e9QmoqtvbtKvqClJe8LyP2GXPe",
+    "username": "testuser22",
+    "password": "$2b$12$NQFkQgSqLiUi6k/AHZdCnOV9bjcfBLtkv6TLDRuTiDde4HNeujYBK",
     "group": "B",
+    "cart": [
+      "101873",
+      "105892",
+      "100098",
+      "101511",
+      "101705",
+      "104075",
+      "101595",
+      "103637",
+      "105467",
+      "107606",
+      "104027",
+      "103654"
+    ],
     "cluster": 1
   },
   {
     "user_id": "u23",
-    "username": "testuser22",
-    "password": "$2b$12$DdFzQlci2H6s8KDSpLBGBuxFwJAdkoyPzeeA/kP7T.iW9QEZ0lS9i",
+    "username": "testuser23",
+    "password": "$2b$12$fnMfdq6o9e6FjQqZ/656MuGuYaJKsQBO1J7ADfkmL9J1Ypi7N9eCy",
     "group": "B",
-    "cluster": 2
+    "cart": [
+      "108244",
+      "100538",
+      "100352",
+      "101697",
+      "105642",
+      "101461",
+      "103165",
+      "108702",
+      "105434",
+      "107659",
+      "107316",
+      "109622",
+      "106164"
+    ],
+    "cluster": 0
   },
   {
     "user_id": "u24",
-    "username": "testuser23",
-    "password": "$2b$12$w82yI2ANniIDcOVPZV.BWuT0w/kNJtGr73Sz2OV2kjUsLDEdooXHO",
-    "group": "A",
+    "username": "testuser24",
+    "password": "$2b$12$ewNRem0d6X5KpStj9RdjZOmUZhKAhuVh1gtjb9IR8XQCxcbUIAI6.",
+    "group": "B",
+    "cart": [
+      "104739",
+      "102102",
+      "100205",
+      "100027",
+      "109286",
+      "102415",
+      "102371",
+      "104269",
+      "106553",
+      "106939",
+      "105034",
+      "102783",
+      "107063",
+      "107043",
+      "106711"
+    ],
     "cluster": 2
   },
   {
     "user_id": "u25",
-    "username": "testuser24",
-    "password": "$2b$12$/txbPOb8Vdn1pvkxlerqsuTEdOuVhRUlB.Z6gyiRaBfQ7okcIYMNC",
+    "username": "testuser25",
+    "password": "$2b$12$juEZubkFfxh9ov7IPzxqZO2256bmugHWIWHvHDpufYYPk00ihHNDO",
     "group": "A",
-    "cluster": 0
+    "cart": [
+      "102947",
+      "101448",
+      "108600",
+      "103619",
+      "105017",
+      "107938",
+      "103097",
+      "105449",
+      "100081",
+      "104441",
+      "102331"
+    ],
+    "cluster": 2
   },
   {
     "user_id": "u26",
-    "username": "testuser25",
-    "password": "$2b$12$1RzwrDGk4PUFaCw.3PlcAud3UwomRg7Mn.0nBDco2KcMiis4V4oYq",
-    "group": "B",
+    "username": "testuser26",
+    "password": "$2b$12$kBIQx.hji1vuH1M4ot6gqOlfW19cQUVHmpTWgiB0S.jOGy9rK2bou",
+    "group": "A",
+    "cart": [
+      "109323",
+      "106524",
+      "104434",
+      "107879",
+      "105704",
+      "105252",
+      "102287",
+      "106636",
+      "103149",
+      "101788",
+      "103555"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u27",
-    "username": "testuser26",
-    "password": "$2b$12$kIGRxe6qV/LG5/0UsO5EgeaZhlKkcSkHmvAohqag0hUS8LinhicwG",
-    "group": "A",
-    "cluster": 0
+    "username": "testuser27",
+    "password": "$2b$12$Lx/wNvjER5njl6gneA4Huum1yA7qMt3xLmB7gRVdtwIDjQLkE0cay",
+    "group": "B",
+    "cart": [
+      "108562",
+      "105480",
+      "107265",
+      "106452",
+      "104213",
+      "104349",
+      "100654",
+      "104819"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u28",
-    "username": "testuser27",
-    "password": "$2b$12$SbpdBbK.RkV9Cv00rBwk5uBoiWFhc9qNRufYaTFDz3uWt8o/El4Te",
+    "username": "testuser28",
+    "password": "$2b$12$cK.dbN/FY84Ifc1FI0A29.rKzO5R4rZ6mXJBOR9ku/dQOci9Khl0y",
     "group": "A",
-    "cluster": 2
+    "cart": [
+      "100852",
+      "104876",
+      "106357",
+      "106975",
+      "103406",
+      "105472",
+      "102410",
+      "108381",
+      "102049"
+    ],
+    "cluster": 1
   },
   {
     "user_id": "u29",
-    "username": "testuser28",
-    "password": "$2b$12$EzGstyhi1T9uCIjk8DEuo.gWSk/WzyWYttSj9vkaCZCmOOJu.Jhb6",
-    "group": "A",
+    "username": "testuser29",
+    "password": "$2b$12$tKYC/HkMikmgy59QCTfe.uuNmIVLVMFbjLGlwEjmahYCb88.lWOs6",
+    "group": "B",
+    "cart": [
+      "101435",
+      "100051",
+      "101596",
+      "103745",
+      "101795",
+      "109829",
+      "107124",
+      "106455",
+      "104719",
+      "100392"
+    ],
     "cluster": 0
   },
   {
     "user_id": "u30",
-    "username": "testuser29",
-    "password": "$2b$12$dPP491omWzXzDmoeA6Awduil1Vk5j43S5Jzf0HkLnMXqwu2T9oTLe",
-    "group": "B",
-    "cluster": 2
-  },
-  {
-    "user_id": "u31",
     "username": "testuser30",
-    "password": "$2b$12$k.WPoWPlzl1zOXDYZfLvVuVzrWpj1SIJPIqO22WwlJ7/fQP86lvKO",
-    "group": "B",
-    "cluster": 2
-  },
-  {
-    "user_id": "u32",
-    "username": "testq",
-    "password": "$2b$12$OqEfbi.U/3fouIvLZd.w3.KWTs/A/W6moBXxQJrJtAjnNWsBSUhPa",
+    "password": "$2b$12$QMfC.4dRt1EoIVFPV/aQd.WhVbUYvbgdFK/R.KcfaW7IkYEE00wci",
     "group": "A",
-    "cluster": -1
+    "cart": [
+      "104626",
+      "109747",
+      "102831",
+      "104703",
+      "103975",
+      "105980",
+      "102848",
+      "102388",
+      "102660"
+    ],
+    "cluster": 0
   }
 ]
