@@ -94,8 +94,12 @@ for _, e in events.iterrows():
         price_affinity=user_price_affinity(profile, product['price'])
     )
 
+    # Event weights: click=1, add_to_cart=2
+    event_weights = {"click": 1, "add_to_cart": 2}
+    weight = event_weights.get(e.event, 0)
+
     X.append(features)
-    y.append(1 if e.event == "click" else 0)
+    y.append(weight)
 
 
 # Check for empty training data

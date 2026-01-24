@@ -17,21 +17,6 @@ export default function App() {
 		if (user) localStorage.setItem('user', JSON.stringify(user));
 	}, [user]);
 
-	/* ---------- AUTH ---------- */
-	const auth = async (e) => {
-		e.preventDefault();
-		const res = await fetch(
-			`${API_BASE_URL}${isSignup ? '/signup' : '/login'}`,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ username, password })
-			}
-		);
-		const data = await res.json();
-		if (res.ok) setUser(data);
-	};
-
 	const logout = () => {
 		localStorage.removeItem('user');
 		setUser(null);
@@ -40,33 +25,173 @@ export default function App() {
 	/* ---------- SEARCH ---------- */
 	const [query, setQuery] = useState('');
 	const [results, setResults] = useState(null); // IMPORTANT: null vs []
+	const [filteredResults, setFilteredResults] = useState([]);
 	const [recent, setRecent] = useState([]);
 	const [recommended, setRecommended] = useState([]);
+	const [searchLoading, setSearchLoading] = useState(false);
+	const [recsLoading, setRecsLoading] = useState(false);
+	const [cart, setCart] = useState([]);
+	const [cartCount, setCartCount] = useState(0);
+	const [cartTotal, setCartTotal] = useState(0);
+	const [showCart, setShowCart] = useState(false);
+	const [cartLoading, setCartLoading] = useState(false);
+
+	/* ---------- FILTERS & SORT ---------- */
+	const [categoryFilter, setCategoryFilter] = useState('');
+	const [minPrice, setMinPrice] = useState('');
+	const [maxPrice, setMaxPrice] = useState('');
+	const [sortBy, setSortBy] = useState('');
+	const [currentPage, setCurrentPage] = useState(1);
+	const ITEMS_PER_PAGE = 12;
+
+	const categories = ['Audio', 'Electronics', 'Computers', 'Photography', 'Accessories', 'Gaming', 'Networking', 'Smart Home', 'Storage'];
+
+	/* ---------- TOAST ---------- */
+	const [toast, setToast] = useState(null);
+	const showToast = (message, type = 'error') => {
+		setToast({ message, type });
+		setTimeout(() => setToast(null), 3000);
+	};
+
+	/* ---------- PRODUCT DETAIL MODAL ---------- */
+	const [selectedProduct, setSelectedProduct] = useState(null);
 
 	const search = async (e) => {
 		e.preventDefault();
-		const res = await fetch(
-			`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&user_id=${user.user_id}`
-		);
-		const data = await res.json();
-		// Handle both array and object response from backend
-		let products = Array.isArray(data) ? data : (data.products || []);
-		setResults(products);
+		setSearchLoading(true);
+		setCurrentPage(1);
+		// Reset filters before applying intent
+		setCategoryFilter('');
+		setMinPrice('');
+		setMaxPrice('');
+		setSortBy('');
+		try {
+			const res = await fetch(
+				`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&user_id=${user.user_id}`
+			);
+			if (!res.ok) {
+				showToast('Search failed. Please try again.');
+				return;
+			}
+			const data = await res.json();
+			let products = Array.isArray(data) ? data : (data.products || []);
+			setResults(products);
+
+			// Auto-apply intent suggestions
+			if (data.intent) {
+				const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
+
+				// Only auto-apply category if products exist with that category
+				if (suggested_category && products.some(p => p.category === suggested_category)) {
+					setCategoryFilter(suggested_category);
+				}
+				if (suggested_sort) setSortBy(suggested_sort);
+				if (suggested_min_price) setMinPrice(String(suggested_min_price));
+				if (suggested_max_price) setMaxPrice(String(suggested_max_price));
+
+				// Show toast only for actionable intents (sort or price filters, not just category)
+				const actionableIntents = (detected || []).filter(i => i !== 'category');
+				if (actionableIntents.length > 0) {
+					const intentMsg = actionableIntents.map(i => i.replace('_', ' ')).join(', ');
+					showToast(`Applied: ${intentMsg}`, 'success');
+				}
+			}
+		} catch {
+			showToast('Network error. Please check your connection.');
+		} finally {
+			setSearchLoading(false);
+		}
+	};
+
+	// Apply filters and sorting to results
+	useEffect(() => {
+		if (!results) return;
+		let filtered = [...results];
+
+		// Category filter
+		if (categoryFilter) {
+			filtered = filtered.filter(p => p.category === categoryFilter);
+		}
+
+		// Price range filter
+		if (minPrice) {
+			filtered = filtered.filter(p => p.price >= parseFloat(minPrice));
+		}
+		if (maxPrice) {
+			filtered = filtered.filter(p => p.price <= parseFloat(maxPrice));
+		}
+
+		// Sorting
+		if (sortBy === 'price_asc') {
+			filtered.sort((a, b) => a.price - b.price);
+		} else if (sortBy === 'price_desc') {
+			filtered.sort((a, b) => b.price - a.price);
+		} else if (sortBy === 'rating') {
+			filtered.sort((a, b) => b.rating - a.rating);
+		} else if (sortBy === 'popularity') {
+			filtered.sort((a, b) => b.popularity - a.popularity);
+		}
+
+		setFilteredResults(filtered);
+		setCurrentPage(1);
+	}, [results, categoryFilter, minPrice, maxPrice, sortBy]);
+
+	// Pagination
+	const totalPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
+	const paginatedResults = filteredResults.slice(
+		(currentPage - 1) * ITEMS_PER_PAGE,
+		currentPage * ITEMS_PER_PAGE
+	);
+
+	const fetchCart = async () => {
+		if (!user) return;
+		setCartLoading(true);
+		try {
+			const res = await fetch(`${API_BASE_URL}/cart?user_id=${user.user_id}`);
+			const data = await res.json();
+			setCart(data.items || []);
+			setCartCount(data.count || 0);
+			setCartTotal(data.total || 0);
+		} finally {
+			setCartLoading(false);
+		}
 	};
 
 	useEffect(() => {
 		if (!user) return;
+		setRecsLoading(true);
 		fetch(`${API_BASE_URL}/recommendations?user_id=${user.user_id}`)
 			.then((r) => r.json())
 			.then((d) => {
 				setRecent(d.recent || []);
 				setRecommended(d.similar || []);
-			});
+			})
+			.finally(() => setRecsLoading(false));
+		fetchCart();
 	}, [user]);
+
+	const removeFromCart = async (productId) => {
+		await fetch(`${API_BASE_URL}/cart/remove`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ user_id: user.user_id, product_id: productId })
+		});
+		fetchCart();
+	};
+
+	const clearCart = async () => {
+		await fetch(`${API_BASE_URL}/cart/clear`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ user_id: user.user_id })
+		});
+		fetchCart();
+	};
 
 	const handleAuthSubmit = async (e) => {
 		e.preventDefault();
 		setAuthError("");
+		setAuthLoading(true);
 
 		try {
 			const res = await fetch(
@@ -88,11 +213,14 @@ export default function App() {
 			setUser(data);
 		} catch {
 			setAuthError('Network error. Please try again.');
+		} finally {
+			setAuthLoading(false);
 		}
 	};
 
 	/* ---------- AUTH UI ---------- */
 	const [authError, setAuthError] = useState("");
+	const [authLoading, setAuthLoading] = useState(false);
 	if (!user) {
 		return (
 			<div className="auth-page">
@@ -114,8 +242,8 @@ export default function App() {
 							onChange={(e) => setPassword(e.target.value)}
 						/>
 
-						<button type="submit">
-							{isSignup ? 'Sign Up' : 'Log In'}
+						<button type="submit" disabled={authLoading}>
+							{authLoading ? 'Loading...' : (isSignup ? 'Sign Up' : 'Log In')}
 						</button>
 
 						{authError && <div className="auth-error">{authError}</div>}
@@ -150,12 +278,20 @@ export default function App() {
 				>
 					Analytics
 				</button>
-				<button
-					className="logout-btn"
-					onClick={logout}
-				>
-					Logout
-				</button>
+				<div className="topbar-right">
+					<button
+						className="cart-btn"
+						onClick={() => { setShowCart(!showCart); if (!showCart) fetchCart(); }}
+					>
+						🛒 Cart ({cartCount})
+					</button>
+					<button
+						className="logout-btn"
+						onClick={logout}
+					>
+						Logout
+					</button>
+				</div>
 			</header>
 
 			<div className="heading-container">
@@ -165,6 +301,79 @@ export default function App() {
 				</p>
 			</div>
 
+			{/* Cart Modal */}
+			{showCart && (
+				<div className="cart-modal">
+					<div className="cart-header">
+						<h3>🛒 Your Cart ({cartCount} items)</h3>
+						<button className="cart-close" onClick={() => setShowCart(false)}>✕</button>
+					</div>
+					{cartLoading ? (
+						<div className="loading">Loading cart...</div>
+					) : cart.length === 0 ? (
+						<div className="empty">Your cart is empty.</div>
+					) : (
+						<>
+							<div className="cart-items">
+								{cart.map((item, idx) => (
+									<div key={idx} className="cart-item">
+										<div className="cart-item-info" onClick={() => { setSelectedProduct(item); }}>
+											<div className="cart-item-title">{item.title}</div>
+											<div className="cart-item-price">${item.price?.toFixed(2)}</div>
+										</div>
+										<button className="cart-item-remove" onClick={() => removeFromCart(item.product_id)}>✕</button>
+									</div>
+								))}
+							</div>
+							<div className="cart-footer">
+								<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
+								<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
+							</div>
+						</>
+					)}
+				</div>
+			)}
+
+			{/* Toast Notification */}
+			{toast && (
+				<div className={`toast toast-${toast.type}`}>
+					{toast.message}
+				</div>
+			)}
+
+			{/* Product Detail Modal */}
+			{selectedProduct && (
+				<div className="modal-overlay" onClick={() => setSelectedProduct(null)}>
+					<div className="product-modal" onClick={(e) => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => setSelectedProduct(null)}>✕</button>
+						<h2>{selectedProduct.title}</h2>
+						<div className="modal-price">${selectedProduct.price?.toFixed(2)}</div>
+						<div className="modal-meta">
+							<span className="modal-category">{selectedProduct.category}</span>
+							<span className="modal-rating">⭐ {selectedProduct.rating}</span>
+							<span className="modal-popularity">🔥 {selectedProduct.popularity} popularity</span>
+						</div>
+						<p className="modal-description">{selectedProduct.description}</p>
+						<div className="modal-actions">
+							<button
+								className="modal-add-btn"
+								onClick={async () => {
+									await fetch(`${API_BASE_URL}/cart`, {
+										method: 'POST',
+										headers: { 'Content-Type': 'application/json' },
+										body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id })
+									});
+									fetchCart();
+									showToast('Added to cart!', 'success');
+								}}
+							>
+								Add to Cart
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* ✅ WHITE CONTENT CARD */}
 			<main className="container">
 				<form className="search-bar global-search" onSubmit={search}>
@@ -172,29 +381,93 @@ export default function App() {
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
 						placeholder="Search products"
+						disabled={searchLoading}
 					/>
-					<button>Search</button>
+					<button disabled={searchLoading}>
+						{searchLoading ? 'Searching...' : 'Search'}
+					</button>
 				</form>
 				<div className="products">
 					{/* ---------- SEARCH RESULTS ---------- */}
-					{results !== null && (
+					{searchLoading && (
 						<section>
 							<h3>Search Results</h3>
-							{results.length === 0 ? (
+							<div className="loading">Searching...</div>
+						</section>
+					)}
+					{!searchLoading && results !== null && (
+						<section>
+							<h3>Search Results ({filteredResults.length} products)</h3>
+
+							{/* Filters and Sort */}
+							<div className="filters-bar">
+								<select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+									<option value="">All Categories</option>
+									{categories.map(cat => (
+										<option key={cat} value={cat}>{cat}</option>
+									))}
+								</select>
+								<input
+									type="number"
+									placeholder="Min $"
+									value={minPrice}
+									onChange={(e) => setMinPrice(e.target.value)}
+									className="price-input"
+								/>
+								<input
+									type="number"
+									placeholder="Max $"
+									value={maxPrice}
+									onChange={(e) => setMaxPrice(e.target.value)}
+									className="price-input"
+								/>
+								<select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+									<option value="">Sort by</option>
+									<option value="price_asc">Price: Low to High</option>
+									<option value="price_desc">Price: High to Low</option>
+									<option value="rating">Rating</option>
+									<option value="popularity">Popularity</option>
+								</select>
+							</div>
+
+							{filteredResults.length === 0 ? (
 								<div className="empty">
-									No products found. Try a different search!
+									No products found. Try adjusting filters!
 								</div>
 							) : (
-								<div className="grid">
-									{results.map((p) => (
-										<ProductCard
-											key={p.product_id}
-											product={p}
-											userId={user.user_id}
-											query={query}
-										/>
-									))}
-								</div>
+								<>
+									<div className="grid">
+										{paginatedResults.map((p) => (
+											<ProductCard
+												key={p.product_id}
+												product={p}
+												userId={user.user_id}
+												query={query}
+												onCartUpdate={fetchCart}
+												onProductClick={setSelectedProduct}
+											/>
+										))}
+									</div>
+
+									{/* Pagination */}
+									{totalPages > 1 && (
+										<div className="pagination">
+											<button
+												onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+												disabled={currentPage === 1}
+											>
+												← Prev
+											</button>
+											<span>Page {currentPage} of {totalPages}</span>
+											<button
+												onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+												disabled={currentPage === totalPages}
+											>
+												Next →
+											</button>
+										</div>
+									)}
+								</>
 							)}
 						</section>
 					)}
@@ -202,38 +475,50 @@ export default function App() {
 					{/* ---------- RECENTLY VIEWED ---------- */}
 					<section>
 						<h3>Recently Viewed</h3>
-						<div className="grid">
-							{recent.length === 0 ? (
-								<div className="empty">No recent products.</div>
-							) : (
-								recent.map((p) => (
-									<ProductCard
-										key={p.product_id}
-										product={p}
-										userId={user.user_id}
-									/>
-								))
-							)}
-						</div>
+						{recsLoading ? (
+							<div className="loading">Loading...</div>
+						) : (
+							<div className="grid">
+								{recent.length === 0 ? (
+									<div className="empty">No recent products.</div>
+								) : (
+									recent.map((p) => (
+										<ProductCard
+											key={p.product_id}
+											product={p}
+											userId={user.user_id}
+											onCartUpdate={fetchCart}
+											onProductClick={setSelectedProduct}
+										/>
+									))
+								)}
+							</div>
+						)}
 					</section>
 
 					{/* ---------- RECOMMENDED ---------- */}
 					<section>
 						<h3>Recommended For You</h3>
-						<div className="grid">
-							{recommended.length === 0 ? (
-								<div className="empty">No recommendations yet.</div>
-							) : (
-								recommended.map((p) => (
-									<ProductCard
-										key={p.product_id}
-										product={p}
-										userId={user.user_id}
-										isRecommendation
-									/>
-								))
-							)}
-						</div>
+						{recsLoading ? (
+							<div className="loading">Loading...</div>
+						) : (
+							<div className="grid">
+								{recommended.length === 0 ? (
+									<div className="empty">No recommendations yet.</div>
+								) : (
+									recommended.map((p) => (
+										<ProductCard
+											key={p.product_id}
+											product={p}
+											userId={user.user_id}
+											isRecommendation
+											onCartUpdate={fetchCart}
+											onProductClick={setSelectedProduct}
+										/>
+									))
+								)}
+							</div>
+						)}
 					</section>
 				</div>
 			</main>

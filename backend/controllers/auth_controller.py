@@ -1,16 +1,17 @@
-from flask import Blueprint, request, jsonify
 import random
 import bcrypt
 import hashlib
+from flask import jsonify
 
-from backend.services.security import validate_username, validate_password, hash_password
+from backend.services.security import (
+    validate_username,
+    validate_password,
+    hash_password
+)
 from backend.user_manager import load_users, save_users
 
-bp = Blueprint("auth", __name__)
 
-@bp.route("/signup", methods=["POST"])
-def signup():
-    data = request.json
+def signup_controller(data):
     username = data.get("username")
     password = data.get("password")
 
@@ -26,7 +27,7 @@ def signup():
     if any(u["username"] == username for u in users):
         return jsonify({"error": "username exists"}), 400
 
-    user_id = f"u{len(users)+1}"
+    user_id = f"u{len(users) + 1}"
     group = random.choice(["A", "B"])
 
     users.append({
@@ -37,21 +38,23 @@ def signup():
     })
 
     save_users(users)
-    return jsonify({"user_id": user_id, "username": username, "group": group})
 
-@bp.route("/login", methods=["POST"])
-def login():
-    data = request.json
+    return jsonify({
+        "user_id": user_id,
+        "username": username,
+        "group": group
+    })
+
+
+def login_controller(data):
     username = data.get("username")
     password = data.get("password")
 
-    # Validate username presence
-    ok, err = validate_username(username)
+    ok, _ = validate_username(username)
     if not ok:
         return jsonify({"error": "invalid credentials"}), 401
 
-    # Validate password presence (no complexity check for login)
-    ok, err = validate_password(password, complexity=False)
+    ok, _ = validate_password(password, complexity=False)
     if not ok:
         return jsonify({"error": "invalid credentials"}), 401
 
@@ -63,9 +66,9 @@ def login():
     stored = user["password"]
     valid = False
 
-    if stored.startswith("$2"):
+    if stored.startswith("$2"):  # bcrypt
         valid = bcrypt.checkpw(password.encode(), stored.encode())
-    else:
+    else:  # legacy sha256
         valid = hashlib.sha256(password.encode()).hexdigest() == stored
         if valid:
             user["password"] = hash_password(password)
@@ -74,4 +77,8 @@ def login():
     if not valid:
         return jsonify({"error": "invalid credentials"}), 401
 
-    return jsonify({"user_id": user["user_id"], "username": user["username"], "group": user["group"]})
+    return jsonify({
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "group": user["group"]
+    })

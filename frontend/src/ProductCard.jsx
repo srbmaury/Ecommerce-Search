@@ -20,7 +20,9 @@ export default function ProductCard({
     product,
     userId,
     query,
-    isRecommendation
+    isRecommendation,
+    onCartUpdate,
+    onProductClick
 }) {
     const [added, setAdded] = useState(false);
 
@@ -37,6 +39,8 @@ export default function ProductCard({
                 product_id: product.product_id
             })
         });
+
+        if (onCartUpdate) onCartUpdate();
     };
 
     const onClick = async (e) => {
@@ -44,6 +48,7 @@ export default function ProductCard({
         if (!isRecommendation) {
             await logEvent('click', product.product_id, query, userId);
         }
+        if (onProductClick) onProductClick(product);
     };
 
     return (

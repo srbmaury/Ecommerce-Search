@@ -76,6 +76,52 @@ def get_user_profile(user_id):
 
     return _user_profiles.get(user_id)
 
+def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
+    """Search products by category when fuzzy search returns no results"""
+    profile = get_user_profile(user_id)
+
+    filtered_products = [row for _, row in products.iterrows() if row.category == category]
+
+    if ab_group == "B":
+        return sorted([
+            {
+                "product_id": int(row.product_id),
+                "title": row.title,
+                "price": row.price,
+                "category": row.category,
+                "rating": float(row.rating),
+                "popularity": int(row.popularity),
+                "description": row.description,
+                "score": float(row.popularity)
+            }
+            for row in filtered_products
+        ], key=lambda x: x["score"], reverse=True)[:limit]
+
+    results = []
+    for row in filtered_products:
+        base_cat_score = user_category_score(profile, row.category)
+        features = build_features(
+            popularity=row.popularity,
+            rating=row.rating,
+            created_at=row.created_at,
+            category_score=base_cat_score,
+            price_affinity=user_price_affinity(profile, row.price)
+        )
+        score = predict_score(features)
+        results.append({
+            "product_id": int(row.product_id),
+            "title": row.title,
+            "price": row.price,
+            "category": row.category,
+            "rating": float(row.rating),
+            "popularity": int(row.popularity),
+            "description": row.description,
+            "score": round(score, 3)
+        })
+
+    return sorted(results, key=lambda x: x["score"], reverse=True)[:limit]
+
+
 def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
     profile = get_user_profile(user_id)
 
