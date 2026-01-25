@@ -22,16 +22,38 @@ export default function ProductCard({
     query,
     isRecommendation,
     onCartUpdate,
-    onProductClick
+    onProductClick,
+    cartQuantity = 0
 }) {
-    const [added, setAdded] = useState(false);
+    const [added, setAdded] = useState(cartQuantity > 0);
+    const [quantity, setQuantity] = useState(cartQuantity);
 
     const addToCart = async (e) => {
         e.stopPropagation();
-        if (added) return;
-        setAdded(true);
-
+        
         await fetch(`${API_BASE_URL}/cart`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                user_id: userId,
+                product_id: product.product_id,
+                query: query || ''
+            })
+        });
+
+        if (!added) {
+            setAdded(true);
+            setQuantity(1);
+        } else {
+            setQuantity(prev => prev + 1);
+        }
+        if (onCartUpdate) onCartUpdate();
+    };
+
+    const decrementCart = async (e) => {
+        e.stopPropagation();
+        
+        await fetch(`${API_BASE_URL}/cart/remove`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -40,6 +62,12 @@ export default function ProductCard({
             })
         });
 
+        if (quantity <= 1) {
+            setAdded(false);
+            setQuantity(0);
+        } else {
+            setQuantity(prev => prev - 1);
+        }
         if (onCartUpdate) onCartUpdate();
     };
 
@@ -63,13 +91,67 @@ export default function ProductCard({
                 {product.category} • Rating: {product.rating}
             </div>
 
-            <button
-                className={`pc-btn${added ? ' added' : ''}`}
-                onClick={addToCart}
-                disabled={added}
-            >
-                {added ? 'Added' : 'Add to Cart'}
-            </button>
+            {!added ? (
+                <button
+                    className="pc-btn"
+                    onClick={addToCart}
+                >
+                    Add to Cart
+                </button>
+            ) : (
+                <div className="quantity-controls" onClick={(e) => e.stopPropagation()} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '10px',
+                    padding: '8px'
+                }}>
+                    <button
+                        onClick={decrementCart}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: '2px solid #4CAF50',
+                            background: 'white',
+                            color: '#4CAF50',
+                            fontSize: '18px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        −
+                    </button>
+                    <span style={{
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        minWidth: '30px',
+                        textAlign: 'center'
+                    }}>
+                        {quantity}
+                    </span>
+                    <button
+                        onClick={addToCart}
+                        style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            border: '2px solid #4CAF50',
+                            background: '#4CAF50',
+                            color: 'white',
+                            fontSize: '18px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                    >
+                        +
+                    </button>
+                </div>
+            )}
         </div>
     );
 }
