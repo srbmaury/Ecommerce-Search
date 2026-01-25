@@ -11,15 +11,20 @@ import os
 API = "http://localhost:5000"
 CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else "data/products.csv"
 EVENTS_FILE = "data/search_events.csv"
+USERS_FILE = "backend/users.json"
 USER_COUNT = 30
 EVENTS_PER_USER = 40
 
-# Ensure search_events.csv exists with header
-if not os.path.exists(EVENTS_FILE):
-    os.makedirs(os.path.dirname(EVENTS_FILE), exist_ok=True)
-    with open(EVENTS_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["user_id", "query", "product_id", "event", "timestamp", "group"])
+# Clear users.json and search_events.csv before starting
+print("🧹 Clearing existing data...")
+os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
+with open(USERS_FILE, "w", encoding="utf-8") as f:
+    f.write("[]")
+
+os.makedirs(os.path.dirname(EVENTS_FILE), exist_ok=True)
+with open(EVENTS_FILE, "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["user_id", "query", "product_id", "event", "timestamp", "group"])
 
 # ----------------------------
 # Load products from CSV (create if missing)
@@ -41,20 +46,28 @@ with open(CSV_FILE, newline="", encoding="utf-8") as f:
             "title": row["title"],
             "category": row["category"]
         })
-        # Build search keywords
-        category_keywords[row["category"]].extend(row["title"].lower().split())
+        # Build search keywords - extract only brand names (first word of title)
+        brand = row["title"].split()[0] if row["title"] else ""
+        if brand and len(brand) > 2:
+            category_keywords[row["category"]].append(brand.lower())
 
 PRODUCT_IDS = [p["product_id"] for p in products]
 
-# Unique searchable terms
-SEARCH_TERMS = list(
-    set(
-        word
-        for words in category_keywords.values()
-        for word in words
-        if len(word) > 3
-    )
-)
+# Add category names as search terms too
+categories = list(set(p["category"] for p in products))
+
+# Unique searchable terms (brands)
+brand_terms = list(set(
+    word.lower()
+    for words in category_keywords.values()
+    for word in words
+))
+
+# Combine brands and categories for search terms
+SEARCH_TERMS = brand_terms + [cat.lower() for cat in categories]
+
+# Filter out any terms that look like product IDs (contain hyphens and numbers)
+SEARCH_TERMS = [term for term in SEARCH_TERMS if not any(char.isdigit() for char in term)]
 
 # ----------------------------
 # Auth helpers
@@ -111,13 +124,20 @@ def simulate_user(user_id):
 
         # Add to cart (30%)
         if random.random() < 0.3:
-            requests.post(
-                f"{API}/cart",
-                json={
-                    "user_id": user_id,
-                    "product_id": product_id
-                }
-            )
+            # Sometimes add multiple quantities (20% chance of 2-3 items)
+            quantity = 1
+            if random.random() < 0.2:
+                quantity = random.randint(2, 3)
+            
+            for _ in range(quantity):
+                requests.post(
+                    f"{API}/cart",
+                    json={
+                        "user_id": user_id,
+                        "product_id": product_id,
+                        "query": query
+                    }
+                )
 
         time.sleep(random.uniform(0.03, 0.08))
 

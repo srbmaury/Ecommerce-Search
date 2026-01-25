@@ -11,6 +11,7 @@ from utils.data_paths import get_data_path
 def add_to_cart_controller(data):
     raw_user_id = data.get("user_id")
     product_id = data.get("product_id")
+    query = data.get("query", "")
 
     if not raw_user_id or not product_id:
         return {"error": "user_id and product_id required"}, 400
@@ -26,8 +27,13 @@ def add_to_cart_controller(data):
         user = next((u for u in users if u["user_id"] == user_id), None)
         if user:
             group = user.get("group", "A")
-            cart = user.get("cart", [])
-            cart.append(str(product_id))
+            cart = user.get("cart", {})
+            # Convert old list format to dict format if needed
+            if isinstance(cart, list):
+                cart = {str(pid): 1 for pid in cart}
+            # Add or increment quantity
+            product_id_str = str(product_id)
+            cart[product_id_str] = cart.get(product_id_str, 0) + 1
             user["cart"] = cart
             save_users(users)
     except Exception:
@@ -38,7 +44,7 @@ def add_to_cart_controller(data):
             writer = csv.writer(f)
             writer.writerow([
                 user_id,
-                "",
+                sanitize_csv_field(query),
                 sanitize_csv_field(product_id),
                 "add_to_cart",
                 datetime.now().isoformat(),
@@ -61,13 +67,16 @@ def get_cart_controller(raw_user_id):
     if user_id is None:
         return {"error": "invalid user_id"}, 400
 
-    cart_product_ids = []
+    cart_data = {}
 
     try:
         users = load_users()
         user = next((u for u in users if u["user_id"] == user_id), None)
         if user:
-            cart_product_ids = user.get("cart", [])
+            cart_data = user.get("cart", {})
+            # Convert old list format to dict format if needed
+            if isinstance(cart_data, list):
+                cart_data = {str(pid): 1 for pid in cart_data}
     except Exception:
         pass
 
@@ -75,19 +84,22 @@ def get_cart_controller(raw_user_id):
     cart_items = []
 
     if not products_df.empty:
-        for pid in cart_product_ids:
+        for pid, quantity in cart_data.items():
             try:
                 product = products_df[products_df["product_id"] == int(pid)]
                 if not product.empty:
-                    cart_items.append(product.iloc[0].to_dict())
+                    item = product.iloc[0].to_dict()
+                    item["quantity"] = quantity
+                    cart_items.append(item)
             except Exception:
                 continue
 
-    total = sum(item.get("price", 0) for item in cart_items)
+    total = sum(item.get("price", 0) * item.get("quantity", 1) for item in cart_items)
+    total_items = sum(item.get("quantity", 1) for item in cart_items)
 
     return {
         "items": cart_items,
-        "count": len(cart_product_ids),
+        "count": total_items,
         "total": total
     }, 200
 
@@ -107,9 +119,16 @@ def remove_from_cart_controller(data):
         users = load_users()
         user = next((u for u in users if u["user_id"] == user_id), None)
         if user:
-            cart = user.get("cart", [])
+            cart = user.get("cart", {})
+            # Convert old list format to dict format if needed
+            if isinstance(cart, list):
+                cart = {str(pid): 1 for pid in cart}
+            # Remove product or decrement quantity
             if product_id in cart:
-                cart.remove(product_id)
+                if cart[product_id] > 1:
+                    cart[product_id] -= 1
+                else:
+                    del cart[product_id]
                 user["cart"] = cart
                 save_users(users)
     except Exception:
@@ -132,7 +151,7 @@ def clear_cart_controller(data):
         users = load_users()
         user = next((u for u in users if u["user_id"] == user_id), None)
         if user:
-            user["cart"] = []
+            user["cart"] = {}
             save_users(users)
     except Exception:
         pass

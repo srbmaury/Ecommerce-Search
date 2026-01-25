@@ -157,6 +157,12 @@ export default function App() {
 		}
 	};
 
+	// Helper to get quantity for a product from cart
+	const getCartQuantity = (productId) => {
+		const item = cart.find(item => item.product_id === productId);
+		return item ? item.quantity : 0;
+	};
+
 	useEffect(() => {
 		if (!user) return;
 		setRecsLoading(true);
@@ -317,19 +323,67 @@ export default function App() {
 							<div className="cart-items">
 								{cart.map((item, idx) => (
 									<div key={idx} className="cart-item">
-										<div className="cart-item-info" onClick={() => { setSelectedProduct(item); }}>
-											<div className="cart-item-title">{item.title}</div>
-											<div className="cart-item-price">${item.price?.toFixed(2)}</div>
-										</div>
-										<button className="cart-item-remove" onClick={() => removeFromCart(item.product_id)}>✕</button>
+									<div className="cart-item-info" onClick={() => { setSelectedProduct(item); }} style={{ flex: 1 }}>
+										<div className="cart-item-title">{item.title}</div>
+										<div className="cart-item-price">${item.price?.toFixed(2)} each</div>
+										{item.quantity > 1 && <div style={{ fontSize: '0.9em', color: '#666', marginTop: '4px' }}>Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>}
 									</div>
-								))}
-							</div>
-							<div className="cart-footer">
-								<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
-								<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
-							</div>
-						</>
+									<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+										<button
+											onClick={() => removeFromCart(item.product_id)}
+											style={{
+												width: '28px',
+												height: '28px',
+												borderRadius: '50%',
+												border: '2px solid #f44336',
+												background: 'white',
+												color: '#f44336',
+												fontSize: '16px',
+												cursor: 'pointer',
+												display: 'flex',
+												alignItems: 'center',
+												justifyContent: 'center'
+											}}
+										>
+											−
+										</button>
+										<span style={{ fontSize: '16px', fontWeight: 'bold', minWidth: '25px', textAlign: 'center' }}>
+											{item.quantity}
+										</span>
+										<button
+											onClick={async () => {
+												await fetch(`${API_BASE_URL}/cart`, {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+												body: JSON.stringify({ user_id: user.user_id, product_id: item.product_id, query: '' })
+												});
+												fetchCart();
+											}}
+											style={{
+												width: '28px',
+												height: '28px',
+												borderRadius: '50%',
+												border: '2px solid #4CAF50',
+												background: '#4CAF50',
+												color: 'white',
+												fontSize: '16px',
+												cursor: 'pointer',
+												display: 'flex',
+												alignItems: 'center',
+												justifyContent: 'center'
+											}}
+										>
+											+
+										</button>
+									</div>
+								</div>
+							))}
+						</div>
+						<div className="cart-footer">
+							<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
+							<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
+						</div>
+					</>
 					)}
 				</div>
 			)}
@@ -361,7 +415,7 @@ export default function App() {
 									await fetch(`${API_BASE_URL}/cart`, {
 										method: 'POST',
 										headers: { 'Content-Type': 'application/json' },
-										body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id })
+										body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
 									});
 									fetchCart();
 									showToast('Added to cart!', 'success');
@@ -445,28 +499,25 @@ export default function App() {
 												query={query}
 												onCartUpdate={fetchCart}
 												onProductClick={setSelectedProduct}
+												cartQuantity={getCartQuantity(p.product_id)}
 											/>
 										))}
 									</div>
-
-									{/* Pagination */}
-									{totalPages > 1 && (
-										<div className="pagination">
-											<button
-												onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-												disabled={currentPage === 1}
-											>
-												← Prev
-											</button>
-											<span>Page {currentPage} of {totalPages}</span>
-											<button
-												onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-												disabled={currentPage === totalPages}
-											>
-												Next →
-											</button>
-										</div>
-									)}
+									<div className="pagination">
+										<button
+											onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+											disabled={currentPage === 1}
+										>
+											← Prev
+										</button>
+										<span>Page {currentPage} of {totalPages}</span>
+										<button
+											onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+											disabled={currentPage === totalPages}
+										>
+											Next →
+										</button>
+									</div>
 								</>
 							)}
 						</section>
@@ -487,9 +538,11 @@ export default function App() {
 											key={p.product_id}
 											product={p}
 											userId={user.user_id}
-											onCartUpdate={fetchCart}
-											onProductClick={setSelectedProduct}
-										/>
+										query=""
+										onCartUpdate={fetchCart}
+										onProductClick={setSelectedProduct}
+										cartQuantity={getCartQuantity(p.product_id)}
+									/>
 									))
 								)}
 							</div>
@@ -511,10 +564,12 @@ export default function App() {
 											key={p.product_id}
 											product={p}
 											userId={user.user_id}
-											isRecommendation
-											onCartUpdate={fetchCart}
-											onProductClick={setSelectedProduct}
-										/>
+										query=""
+										isRecommendation
+										onCartUpdate={fetchCart}
+										onProductClick={setSelectedProduct}
+										cartQuantity={getCartQuantity(p.product_id)}
+									/>
 									))
 								)}
 							</div>
