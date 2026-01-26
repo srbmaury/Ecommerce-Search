@@ -1,14 +1,22 @@
-import pandas as pd
-from utils.data_paths import get_data_path
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-def build_user_profiles(events_path=None,
-                        products_path=None):
-    if events_path is None:
-        events_path = get_data_path("search_events.csv")
-    if products_path is None:
-        products_path = get_data_path("products.csv")
-    events = pd.read_csv(events_path, dtype={"product_id": str})
-    products = pd.read_csv(products_path, dtype={"product_id": str})
+import pandas as pd
+from backend.db_event_service import get_events_df
+from backend.db_product_service import get_products_df
+
+def build_user_profiles():
+    """Build user profiles from database data."""
+    events = get_events_df()
+    products = get_products_df()
+    
+    if events.empty or products.empty:
+        return {}
+    
+    # Ensure product_id is string for merging
+    events['product_id'] = events['product_id'].astype(str)
+    products['product_id'] = products['product_id'].astype(str)
 
     merged = events.merge(products, on="product_id")
 

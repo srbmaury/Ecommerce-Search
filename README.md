@@ -8,10 +8,10 @@
 A personalized ecommerce search engine with user authentication, event logging, ML-based ranking, and user clustering for segment-based recommendations.
 
 ## Tech Stack
-- **Backend:** Flask, Flask-CORS
+- **Backend:** Flask, Flask-CORS, SQLAlchemy
+- **Database:** PostgreSQL (Neon) / SQLite
 - **Frontend:** React, Vite, TailwindCSS-inspired styling
 - **ML:** scikit-learn, pandas, NumPy, joblib
-- **Storage:** CSV/JSON file-based
 
 ---
 
@@ -21,20 +21,20 @@ A personalized ecommerce search engine with user authentication, event logging, 
 **Important:** This project is not compatible with Python 3.13. Use Python 3.11 (or 3.10/3.12 if all packages support it).
 
 Install Python 3.11 (macOS/Homebrew):
-```
+```bash
 brew install python@3.11
 ```
 
 Create and activate a virtual environment:
 
 For macOS/Linux:
-```
+```bash
 python3.11 -m venv venv
 source venv/bin/activate
 ```
 
 For Windows:
-```
+```bash
 python -m venv venv
 venv\Scripts\activate
 ```
@@ -42,48 +42,78 @@ venv\Scripts\activate
 Once activated, continue with the steps below.
 
 ### 1. Install Requirements
-```
+```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. (Optional) Generate Synthetic Data
-You can generate synthetic user and event data for testing and demos. This step is optional, but useful for demo/testing:
+### 2. Configure Database
 
-#### Generate Fake Users & Events
-Populates the backend via API with test users and search/click/cart events. **Backend server must be running!**
+Create a `.env` file in the root directory:
+
+```bash
+cp .env.example .env
 ```
+
+#### Option A: Use Neon PostgreSQL (Recommended for Production)
+1. Sign up at [neon.tech](https://neon.tech) (free tier available)
+2. Create a new project
+3. Copy your connection string
+4. Edit `.env` and set:
+```env
+DATABASE_URL=postgresql://user:password@ep-xxxxx.us-east-2.aws.neon.tech/dbname?sslmode=require
+```
+
+#### Option B: Use SQLite (For Local Development)
+Leave `DATABASE_URL` empty or set to:
+```env
+DATABASE_URL=sqlite:///data/ecommerce.db
+```
+
+### 3. Initialize Database Tables
+
+The database tables are created automatically when you start the backend server for the first time.
+
+### 4. (Optional) Generate Synthetic Data
+
+Generate synthetic user and event data for testing:
+
+**Important:** Backend server must be running first!
+
+```bash
+# Terminal 1: Start backend
+source venv/bin/activate
+python -m backend.app
+
+# Terminal 2: Generate data
+source venv/bin/activate
 python ml/generate_fake_data.py
 ```
-You can adjust user/event counts by editing the script variables.
 
-### 3. Data Preparation
-- Ensure `data/products.csv` and `data/search_events.csv` exist and are formatted as in the repo (or generate them above).
-- The `search_events.csv` header should be:
-  ```
-  user_id,query,product_id,event,timestamp,group
-  ```
+This creates test users (testuser1-30) with search/click/cart events stored directly in the database.
 
-### 4. Train the Ranking Model
-```
+### 5. Train the Ranking Model
+```bash
 python ml/train_ranker.py
 ```
-- This will train the ML model and save it for use in ranking.
+- Trains the ML model using data from the database
+- Saves the model for use in ranking
 
-### 5. Cluster Users (User Segmentation)
-```
+### 6. Cluster Users (User Segmentation)
+```bash
 python ml/assign_user_clusters.py
 ```
-- This will assign each user to a cluster based on their click/category/price preferences.
-- Clusters are stored in `backend/users.json` under the `cluster` key for each user.
+- Assigns each user to a cluster based on their behavior
+- Clusters are stored in the database
 
-### 6. Run the Backend Server
-```
+### 7. Run the Backend Server
+```bash
 python -m backend.app
 ```
 - The Flask server will start on http://127.0.0.1:5000
+- Database connection is initialized automatically
 
-### 7. Run the Frontend
+### 8. Run the Frontend
 **Important:** The frontend must be served via HTTP (not opened directly as a file://) to work with CORS and API calls.
 
 #### Option A: Using VS Code Live Server (Recommended)
@@ -121,11 +151,11 @@ Once the frontend is running:
 ## Features
 
 ### Core Features
-- **Signup/Login:** Persistent user authentication with hashed passwords.
-- **Event Logging:** All clicks and add-to-cart actions are logged in `search_events.csv`.
+- **Signup/Login:** Persistent user authentication with hashed passwords stored in database.
+- **Event Logging:** All clicks and add-to-cart actions are logged in the database.
 - **ML Ranking:** Product ranking is personalized using user profile, cluster preferences, and recent user activity.
 - **User Clustering:** Users are grouped by behavior for segment-based recommendations.
-- **A/B Testing:** Users are randomly assigned to group A (full personalization) or B (popularity baseline) at signup. All events are logged with group for analytics.
+- **A/B Testing:** Users are randomly assigned to group A (full personalization) or B (popularity baseline) at signup.
 - **Fuzzy Search:** Search results require at least one fuzzy-matched word from the query in the product title or description.
 - **Recent Usage Boost:** Products you recently clicked or added to cart are boosted to the top of your search results.
 - **Auto-Retrain:** The backend automatically retrains the model (every 500 events or 24h) and re-clusters users (every 200 events or 6h) while running.
@@ -141,7 +171,7 @@ Once the frontend is running:
 - **Cart Display:** View cart with item count and total price.
 - **Remove Items:** Remove individual items from cart.
 - **Clear Cart:** Clear all items at once.
-- **Persistent Cart:** Cart data persists across sessions (stored in user profile).
+- **Persistent Cart:** Cart data persists across sessions (stored in database).
 
 ### Dynamic Popularity
 - **Click Tracking:** Product popularity increases by +1 on each click.
@@ -168,13 +198,18 @@ Once the frontend is running:
 ---
 
 ## File Structure
-- `backend/` - Flask API
+- `backend/` - Flask API with database integration
+  - `models.py` - SQLAlchemy database models
+  - `database.py` - Database initialization
+  - `db_user_manager.py` - User database operations
+  - `db_product_service.py` - Product database operations
+  - `db_event_service.py` - Event database operations
   - `controllers/` - Business logic (auth, cart, events, recommendations, search, analytics)
   - `routes/` - API route definitions
   - `services/` - Shared utilities (retrain triggers, user profiles, analytics HTML)
 - `frontend/` - React/Vite UI
 - `ml/` - Model training, feature engineering, user clustering
-- `data/` - Product and event data
+- `data/` - SQLite database file (when using local development)
 
 ---
 
@@ -204,17 +239,17 @@ Once the frontend is running:
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/srbmaury/Ecommerce-Search.git
+   cd Ecommerce-Search
    ```
 
-2. **Set up WSGI configuration:**
+2. **Set up database:**
+   - Create a `.env` file with your DATABASE_URL
+   - Tables are created automatically on first run
+
+3. **Set up WSGI configuration:**
    - Source code: `/home/YOUR_USERNAME/Ecommerce-Search`
    - WSGI file should import: `from backend.app import create_app`
    - Application callable: `application = create_app()`
-
-3. **Ensure data files exist:**
-   - `data/products.csv`
-   - `data/search_events.csv`
-   - `backend/users.json`
 
 4. **Frontend serving:**
    - Static files are served from `frontend/dist/`

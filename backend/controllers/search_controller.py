@@ -1,5 +1,5 @@
 from backend.search import search_products, search_by_category
-from backend.user_manager import load_users
+from backend.db_user_manager import get_user_by_id
 from backend.utils.sanitize import sanitize_user_id
 from backend.intent import detect_intent
 
@@ -24,11 +24,10 @@ def search_controller(query, raw_user_id):
     # ---- user context ----
     try:
         if user_id:
-            users = load_users()
-            user = next((u for u in users if u["user_id"] == user_id), None)
+            user = get_user_by_id(user_id)
             if user:
-                cluster = user.get("cluster")
-                group = user.get("group", "A")
+                cluster = user.cluster
+                group = user.group or "A"
     except Exception:
         pass
 
