@@ -8,8 +8,6 @@ from backend.services.retrain_trigger import record_event
 
 
 def log_event_controller(data):
-    timestamp = datetime.utcnow()
-
     raw_user_id = data.get("user_id", "")
     user_id = sanitize_user_id(raw_user_id)
 
@@ -25,6 +23,7 @@ def log_event_controller(data):
         if user:
             group = user.group or "A"
     except Exception:
+        # If user lookup fails, continue with default group A
         pass
 
     event_type = data.get("event", "")
@@ -35,6 +34,7 @@ def log_event_controller(data):
     try:
         create_search_event(user_id, query, product_id, event_type, group)
     except Exception:
+        # If event logging fails, continue processing (non-critical)
         pass
 
     # Popularity rule

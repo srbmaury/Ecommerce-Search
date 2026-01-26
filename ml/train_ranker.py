@@ -37,7 +37,6 @@ try:
     products = get_products_df()
     if products.empty:
         print("❌ No products found in database!")
-        print("   Run 'python migrate_to_db.py' first to load products.")
         exit(1)
 except Exception as e:
     print(f"❌ Failed to load products: {e}")

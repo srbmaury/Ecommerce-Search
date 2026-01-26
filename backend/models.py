@@ -42,7 +42,7 @@ class Product(Base):
     price = Column(Float, nullable=False)
     rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
-    popularity = Column(Integer, default=0, index=True)
+    popularity = Column(Integer, default=0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     

@@ -33,12 +33,14 @@ def add_to_cart_controller(data):
             cart[product_id_str] = cart.get(product_id_str, 0) + 1
             update_user_cart(user_id, cart)
     except Exception:
+        # If cart update fails, continue to log event (cart operation is non-critical)
         pass
 
     # Log the event to database
     try:
         create_search_event(user_id, query, product_id, 'add_to_cart', group)
     except Exception:
+        # If event logging fails, continue processing (non-critical)
         pass
 
     update_product_popularity(product_id, 3)
@@ -66,7 +68,7 @@ def get_cart_controller(raw_user_id):
             # Convert old list format to dict format if needed
             if isinstance(cart_data, list):
                 cart_data = {str(pid): 1 for pid in cart_data}
-    except Exception:
+    except Exception:        # If user lookup fails, return empty cart        
         pass
 
     cart_items = []
@@ -86,6 +88,7 @@ def get_cart_controller(raw_user_id):
                     item["quantity"] = quantity
                     cart_items.append(item)
             except Exception:
+                # Skip products that can't be loaded
                 continue
 
     total = sum(item.get("price", 0) * item.get("quantity", 1) for item in cart_items)
@@ -125,6 +128,7 @@ def remove_from_cart_controller(data):
                     del cart[product_id]
                 update_user_cart(user_id, cart)
     except Exception:
+        # If cart update fails, silently ignore (non-critical operation)
         pass
 
     return {"status": "removed from cart"}, 200
@@ -145,6 +149,7 @@ def clear_cart_controller(data):
         if user:
             update_user_cart(user_id, {})
     except Exception:
+        # If cart clear fails, silently ignore (non-critical operation)
         pass
 
     return {"status": "cart cleared"}, 200

@@ -60,6 +60,10 @@ def _load_products():
             products["created_at"] = pd.to_datetime(products["created_at"])
             texts = (products["title"] + " " + products["description"]).tolist()
             vectorizer, tfidf_matrix = build_vectorizer(texts)
+        else:
+            # If products is empty, reset vectorizer and matrix to None
+            vectorizer = None
+            tfidf_matrix = None
     return products, vectorizer, tfidf_matrix
 
 def user_category_score(profile, category):

@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse, urlunparse
 from flask_cors import CORS
 
 def configure_cors(app):
@@ -30,7 +31,17 @@ def get_database_url():
         database_url = f"sqlite:///{db_path}"
     
     # Handle postgres:// URLs (convert to postgresql:// for SQLAlchemy)
+    # Use proper URL parsing to preserve query parameters and other components
     if database_url.startswith("postgres://"):
-        database_url = database_url.replace("postgres://", "postgresql://", 1)
+        parsed = urlparse(database_url)
+        # Reconstruct with postgresql scheme while preserving all other components
+        database_url = urlunparse((
+            "postgresql",
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment
+        ))
     
     return database_url

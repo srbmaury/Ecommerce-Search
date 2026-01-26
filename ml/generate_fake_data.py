@@ -48,7 +48,6 @@ try:
     
     if not db_products:
         print("❌ No products found in database!")
-        print("   Run 'python migrate_to_db.py' first to load products.")
         sys.exit(1)
     
     for product in db_products:

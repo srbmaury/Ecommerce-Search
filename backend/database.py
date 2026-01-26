@@ -36,7 +36,8 @@ def init_db():
         connect_args=connect_args
     )
     
-    # Create session factory - NOT scoped_session to avoid thread-local caching issues
+    # Create session factory - NOT scoped_session because it creates thread-local sessions
+    # that persist across requests, leading to stale data and transaction issues in web apps
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     
     return engine, SessionLocal
