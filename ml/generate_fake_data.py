@@ -4,17 +4,28 @@ import time
 import sys
 from collections import defaultdict
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add parent directory to path for database imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.database import get_db_session
+from backend.database import get_db_session, init_db, create_tables
 from backend.models import User, Product, SearchEvent
 
 
 API = "http://localhost:5000"
 USER_COUNT = 30
 EVENTS_PER_USER = 40
+
+# ----------------------------
+# Initialize database
+# ----------------------------
+print("🔧 Initializing database...")
+init_db()
+create_tables()
 
 # ----------------------------
 # Clear existing test data from database
