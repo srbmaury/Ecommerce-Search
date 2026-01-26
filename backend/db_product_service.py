@@ -90,6 +90,30 @@ def get_popular_products(limit=20):
         session.close()
 
 
+def get_products_by_ids(product_ids):
+    """Get multiple products by their IDs."""
+    session = get_db_session()
+    try:
+        # Convert all product_ids to strings for comparison
+        str_product_ids = [str(pid) for pid in product_ids]
+        products = session.query(Product).filter(
+            Product.product_id.in_(str_product_ids)
+        ).all()
+        return [{
+            'product_id': int(p.product_id),
+            'title': p.title,
+            'description': p.description,
+            'category': p.category,
+            'price': p.price,
+            'rating': p.rating,
+            'review_count': p.review_count,
+            'popularity': p.popularity,
+            'created_at': p.created_at
+        } for p in products]
+    finally:
+        session.close()
+
+
 def create_product(product_id, title, description, category, price, rating=0, review_count=0, popularity=0):
     """Create a new product."""
     session = get_db_session()

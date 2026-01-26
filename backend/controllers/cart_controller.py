@@ -3,7 +3,7 @@ from datetime import datetime
 from backend.utils.sanitize import sanitize_user_id
 from backend.db_user_manager import get_user_by_id, update_user_cart
 from backend.db_event_service import create_search_event
-from backend.db_product_service import get_products_df, update_product_popularity
+from backend.db_product_service import get_products_df, update_product_popularity, get_products_by_ids
 from backend.services.retrain_trigger import record_event
 
 def add_to_cart_controller(data):
@@ -69,15 +69,20 @@ def get_cart_controller(raw_user_id):
     except Exception:
         pass
 
-    products_df = get_products_df()
     cart_items = []
 
-    if not products_df.empty:
+    if cart_data:
+        # Only fetch products that are in the cart (more efficient than loading all products)
+        product_ids = list(cart_data.keys())
+        products_list = get_products_by_ids(product_ids)
+        
+        # Create a lookup dict for quick access
+        products_dict = {str(p['product_id']): p for p in products_list}
+        
         for pid, quantity in cart_data.items():
             try:
-                product = products_df[products_df["product_id"] == int(pid)]
-                if not product.empty:
-                    item = product.iloc[0].to_dict()
+                if pid in products_dict:
+                    item = products_dict[pid].copy()
                     item["quantity"] = quantity
                     cart_items.append(item)
             except Exception:

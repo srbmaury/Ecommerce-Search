@@ -1,4 +1,5 @@
 import random
+import uuid
 import bcrypt
 from flask import jsonify
 
@@ -9,10 +10,8 @@ from backend.services.security import (
 )
 from backend.db_user_manager import (
     get_user_by_username, 
-    create_user,
-    get_db_session
+    create_user
 )
-from backend.models import User
 
 
 def signup_controller(data):
@@ -32,22 +31,17 @@ def signup_controller(data):
     if existing_user:
         return jsonify({"error": "username exists"}), 400
 
-    # Count existing users to generate user_id
-    session = get_db_session()
-    try:
-        user_count = session.query(User).count()
-        user_id = f"u{user_count + 1}"
-        group = random.choice(["A", "B"])
-        
-        user = create_user(user_id, username, hash_password(password), group)
-        
-        return jsonify({
-            "user_id": user.user_id,
-            "username": user.username,
-            "group": user.group
-        })
-    finally:
-        session.close()
+    # Generate unique user_id using UUID to avoid race conditions
+    user_id = f"u{uuid.uuid4().hex[:12]}"
+    group = random.choice(["A", "B"])
+    
+    user = create_user(user_id, username, hash_password(password), group)
+    
+    return jsonify({
+        "user_id": user.user_id,
+        "username": user.username,
+        "group": user.group
+    })
 
 
 def login_controller(data):
