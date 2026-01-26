@@ -89,7 +89,8 @@ def get_cart_controller(raw_user_id):
     return {
         "items": cart_items,
         "total": total,
-        "total_items": total_items
+        "total_items": total_items,
+        "count": total_items
     }, 200
 
 

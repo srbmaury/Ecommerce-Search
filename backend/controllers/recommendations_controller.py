@@ -14,9 +14,10 @@ products = None
 def _get_products():
     """Lazy load products from database."""
     global products
-    if products is None:
+    # Reload if products have never been loaded or if the cached DataFrame is empty
+    if products is None or getattr(products, "empty", False):
         products = get_products_df()
-        if not products.empty and "created_at" in products.columns:
+        if products is not None and not products.empty and "created_at" in products.columns:
             products["created_at"] = pd.to_datetime(products["created_at"])
     return products
 

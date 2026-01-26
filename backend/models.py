@@ -61,7 +61,7 @@ class SearchEvent(Base):
     __tablename__ = 'search_events'
     
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(50), ForeignKey('users.user_id'), nullable=False, index=True)
+    user_id = Column(String(50), ForeignKey('users.user_id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
     query = Column(String(500), nullable=True, index=True)
     product_id = Column(String(50), nullable=True, index=True)
     event_type = Column(String(50), nullable=False, index=True)  # click, add_to_cart, search

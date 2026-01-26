@@ -37,7 +37,7 @@ def init_db():
     )
     
     # Create session factory - NOT scoped_session to avoid thread-local caching issues
-    SessionLocal = sessionmaker(autocommit=False, autoflush=True, bind=engine)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     
     return engine, SessionLocal
 
