@@ -2,7 +2,7 @@
 Database service for search event operations.
 """
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import desc, and_
 from backend.database import get_db_session
 from backend.models import SearchEvent
@@ -19,7 +19,7 @@ def create_search_event(user_id, query, product_id, event_type, group='A', posit
             event_type=event_type,
             group=group,
             position=position,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         session.add(event)
         session.commit()
@@ -38,7 +38,7 @@ def get_events_df(since_hours=None):
         query = session.query(SearchEvent)
         
         if since_hours:
-            cutoff = datetime.utcnow() - timedelta(hours=since_hours)
+            cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
             query = query.filter(SearchEvent.timestamp >= cutoff)
         
         events = query.order_by(desc(SearchEvent.timestamp)).all()
@@ -92,12 +92,31 @@ def get_user_interactions(user_id, product_ids):
         session.close()
 
 
+def _escape_ilike_pattern(value):
+    """
+    Escape special characters used in SQL ILIKE patterns.
+
+    Escapes %, _ and \\ so that user input cannot change the pattern
+    semantics. Use together with escape='\\' in ilike().
+    """
+    if value is None:
+        return ""
+    # First escape backslash itself, then % and _
+    value = str(value)
+    value = value.replace("\\", "\\\\")
+    value = value.replace("%", "\\%")
+    value = value.replace("_", "\\_")
+    return value
+
+
 def get_events_by_query(query_text, limit=100):
     """Get events matching a query."""
     session = get_db_session()
     try:
+        escaped_query = _escape_ilike_pattern(query_text)
+        pattern = f'%{escaped_query}%'
         events = session.query(SearchEvent).filter(
-            SearchEvent.query.ilike(f'%{query_text}%')
+            SearchEvent.query.ilike(pattern, escape='\\')
         ).order_by(desc(SearchEvent.timestamp)).limit(limit).all()
         return events
     finally:

@@ -1,4 +1,5 @@
 import pandas as pd
+from datetime import datetime, timezone
 from backend.db_user_manager import load_users
 from backend.db_product_service import get_products_df
 from backend.db_event_service import get_events_df
@@ -9,14 +10,29 @@ from ml.model import predict_score
 
 # Products will be loaded on first use
 products = None
+products_cache_time = None
+CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 
 def _get_products():
-    """Lazy load products from database."""
-    global products
-    # Reload if products have never been loaded or if the cached DataFrame is empty
-    if products is None or getattr(products, "empty", False):
+    """Lazy load products from database with time-based cache invalidation."""
+    global products, products_cache_time
+    current_time = datetime.now(timezone.utc)
+    
+    # Reload if:
+    # 1. Products have never been loaded
+    # 2. The cached DataFrame is empty
+    # 3. Cache has expired (more than CACHE_DURATION_SECONDS old)
+    needs_reload = (
+        products is None or 
+        getattr(products, "empty", False) or
+        products_cache_time is None or
+        (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
+    )
+    
+    if needs_reload:
         products = get_products_df()
+        products_cache_time = current_time
         if products is not None and not products.empty and "created_at" in products.columns:
             products["created_at"] = pd.to_datetime(products["created_at"])
     return products

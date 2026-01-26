@@ -74,9 +74,13 @@ DATABASE_URL=sqlite:///data/ecommerce.db
 
 The database tables are created automatically when you start the backend server for the first time.
 
-### 4. (Optional) Generate Synthetic Data
+### 4. Populate the Database with Product Data
 
-Generate synthetic user and event data for testing:
+To populate the database with initial product data, you can use one of the following methods:
+
+#### Option A: Use the Fake Data Generator (Recommended for Testing)
+
+Generate synthetic product, user, and event data for testing:
 
 **Important:** Backend server must be running first!
 
@@ -90,7 +94,78 @@ source venv/bin/activate
 python ml/generate_fake_data.py
 ```
 
-This creates test users (testuser1-30) with search/click/cart events stored directly in the database.
+This creates:
+- 100 synthetic products with realistic categories and pricing
+- Test users (testuser1-30)
+- Search/click/cart events stored directly in the database
+
+#### Option B: Load Your Own Product Data
+
+Create a Python script to load your products into the database:
+
+```python
+from backend.database import init_db
+from backend.db_product_service import create_product
+
+# Initialize the database
+init_db()
+
+# Add your products
+products_data = [
+    {
+        'product_id': '1',
+        'title': 'Product Name',
+        'description': 'Product description',
+        'category': 'Category Name',
+        'price': 29.99,
+        'rating': 4.5,
+        'review_count': 100,
+        'popularity': 0
+    },
+    # Add more products...
+]
+
+for product in products_data:
+    create_product(**product)
+
+print(f"Loaded {len(products_data)} products")
+```
+
+Save this as `load_products.py` and run:
+```bash
+python load_products.py
+```
+
+#### Migrating from Previous CSV-Based Version
+
+If you're upgrading from a previous version that used CSV files, create a migration script:
+
+```python
+import pandas as pd
+from backend.database import init_db
+from backend.db_product_service import create_product
+
+# Initialize database
+init_db()
+
+# Read old CSV file
+products_df = pd.read_csv('data/products.csv')
+
+# Load products into database
+for _, row in products_df.iterrows():
+    create_product(
+        product_id=str(row['product_id']),
+        title=row['title'],
+        description=row.get('description', ''),
+        category=row.get('category', ''),
+        price=float(row['price']),
+        rating=float(row.get('rating', 0)),
+        review_count=int(row.get('review_count', 0)),
+        popularity=int(row.get('popularity', 0))
+    )
+
+print(f"Migrated {len(products_df)} products")
+```
 
 ### 5. Train the Ranking Model
 ```bash

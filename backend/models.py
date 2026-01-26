@@ -1,7 +1,7 @@
 """
 SQLAlchemy models for the e-commerce search application.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -20,8 +20,8 @@ class User(Base):
     group = Column(String(10), default='A')  # A/B testing group
     cluster = Column(Integer, nullable=True)  # User cluster for recommendations
     cart = Column(JSON, default=dict)  # Cart as JSON: {product_id: quantity}
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Relationship to search events
     search_events = relationship('SearchEvent', back_populates='user', cascade='all, delete-orphan')
@@ -43,8 +43,8 @@ class Product(Base):
     rating = Column(Float, default=0.0)
     review_count = Column(Integer, default=0)
     popularity = Column(Integer, default=0, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
     # Indexes for common queries
     __table_args__ = (
@@ -65,7 +65,7 @@ class SearchEvent(Base):
     query = Column(String(500), nullable=True, index=True)
     product_id = Column(String(50), nullable=True, index=True)
     event_type = Column(String(50), nullable=False, index=True)  # click, add_to_cart, search
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     group = Column(String(10), nullable=True)  # A/B testing group at time of event
     position = Column(Integer, nullable=True)  # Position in search results
     

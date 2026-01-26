@@ -33,13 +33,29 @@ CLUSTER_BOOST_WEIGHT = 0.5
 products = None
 vectorizer = None
 tfidf_matrix = None
+products_cache_time = None
+CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 
 def _load_products():
-    """Lazy load products and build vectorizer."""
-    global products, vectorizer, tfidf_matrix
-    if products is None:
+    """Lazy load products and build vectorizer with time-based cache invalidation."""
+    global products, vectorizer, tfidf_matrix, products_cache_time
+    current_time = datetime.now(timezone.utc)
+    
+    # Reload if:
+    # 1. Products have never been loaded
+    # 2. The cached DataFrame is empty
+    # 3. Cache has expired (more than CACHE_DURATION_SECONDS old)
+    needs_reload = (
+        products is None or 
+        getattr(products, "empty", False) or
+        products_cache_time is None or
+        (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
+    )
+    
+    if needs_reload:
         products = get_products_df()
+        products_cache_time = current_time
         if not products.empty:
             products["created_at"] = pd.to_datetime(products["created_at"])
             texts = (products["title"] + " " + products["description"]).tolist()
