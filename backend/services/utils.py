@@ -1,23 +1,14 @@
-import pandas as pd
-from utils.data_paths import get_data_path
+"""
+Utility functions for services - use database instead.
+"""
+from backend.db_product_service import get_products_df as _get_products_df, update_product_popularity as _update_product_popularity
 
 
 def get_products_df():
-    """Load products DataFrame, returns empty DataFrame on error."""
-    try:
-        return pd.read_csv(get_data_path("products.csv"))
-    except Exception:
-        return pd.DataFrame()
+    """Load products DataFrame from database, returns empty DataFrame on error."""
+    return _get_products_df()
 
 
 def update_product_popularity(product_id, points):
-    """Update product popularity score by given points."""
-    try:
-        products_path = get_data_path("products.csv")
-        df = pd.read_csv(products_path)
-        mask = df["product_id"] == int(product_id)
-        if mask.any():
-            df.loc[mask, "popularity"] += points
-            df.to_csv(products_path, index=False)
-    except Exception:
-        pass
+    """Update product popularity score by given points in database."""
+    return _update_product_popularity(product_id, points)

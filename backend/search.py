@@ -1,15 +1,15 @@
 
 import pandas as pd
-from utils.data_paths import get_data_path
-import difflib
-import json
 from datetime import datetime, timezone
 from ml.user_profile import build_user_profiles
 from ml.features import build_features
 from ml.model import predict_score
 from ml.vectorizer import build_vectorizer
-from backend.user_manager import load_users
-from backend.utils.csv_lock import csv_lock
+from backend.db_user_manager import load_users
+from backend.db_product_service import get_products_df
+from backend.db_event_service import get_events_df
+import difflib
+import json
 
 # Fuzzy matching threshold for search queries
 # A value of 0.7 means tokens must be at least 70% similar to match.
@@ -29,10 +29,22 @@ RECENT_BOOST_BASE = 1.0
 RECENT_BOOST_DECAY = 0.15
 CLUSTER_BOOST_WEIGHT = 0.5
 
-products = pd.read_csv(get_data_path("products.csv"))
-products["created_at"] = pd.to_datetime(products["created_at"])
-texts = (products["title"] + " " + products["description"]).tolist()
-vectorizer, tfidf_matrix = build_vectorizer(texts)
+# Global cache for products and vectorizer
+products = None
+vectorizer = None
+tfidf_matrix = None
+
+
+def _load_products():
+    """Lazy load products and build vectorizer."""
+    global products, vectorizer, tfidf_matrix
+    if products is None:
+        products = get_products_df()
+        if not products.empty:
+            products["created_at"] = pd.to_datetime(products["created_at"])
+            texts = (products["title"] + " " + products["description"]).tolist()
+            vectorizer, tfidf_matrix = build_vectorizer(texts)
+    return products, vectorizer, tfidf_matrix
 
 def user_category_score(profile, category):
     if profile and "category_pref" in profile:
@@ -78,9 +90,13 @@ def get_user_profile(user_id):
 
 def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
     """Search products by category when fuzzy search returns no results"""
+    products_df, _, _ = _load_products()
+    if products_df is None or products_df.empty:
+        return []
+    
     profile = get_user_profile(user_id)
 
-    filtered_products = [row for _, row in products.iterrows() if row.category == category]
+    filtered_products = [row for _, row in products_df.iterrows() if row.category == category]
 
     if ab_group == "B":
         return sorted([
@@ -123,6 +139,10 @@ def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
 
 
 def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
+    products_df, _, _ = _load_products()
+    if products_df is None or products_df.empty:
+        return []
+    
     profile = get_user_profile(user_id)
 
     # --- Filter products by fuzzy query match ---
@@ -137,7 +157,7 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
                     return True
         return False
 
-    filtered_products = [row for _, row in products.iterrows()
+    filtered_products = [row for _, row in products_df.iterrows()
         if fuzzy_match(str(row.title) + ' ' + str(row.description), query_words)]
 
     # --- A/B testing logic ---
@@ -179,15 +199,15 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
     # --- Get user's most recent product interactions ---
     recent_boost = {}
     try:
-        with csv_lock:
-            events = pd.read_csv(get_data_path("search_events.csv"), dtype={"product_id": str})
-        user_events = events[events.user_id == user_id]
-        user_events = user_events[user_events.event.isin(["click", "add_to_cart"])]
-        user_events = user_events.sort_values("timestamp", ascending=False)
-        for i, row in enumerate(user_events.head(5).itertuples()):
-            pid = int(row.product_id)
-            recent_boost[pid] = RECENT_BOOST_BASE - RECENT_BOOST_DECAY * i
-    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, ValueError, KeyError):
+        events = get_events_df()
+        if not events.empty:
+            user_events = events[events.user_id == user_id]
+            user_events = user_events[user_events.event.isin(["click", "add_to_cart"])]
+            user_events = user_events.sort_values("timestamp", ascending=False)
+            for i, row in enumerate(user_events.head(5).itertuples()):
+                pid = int(row.product_id)
+                recent_boost[pid] = RECENT_BOOST_BASE - RECENT_BOOST_DECAY * i
+    except Exception:
         # Silently ignore errors when loading recent user interactions - recent boost is optional
         # and search should continue with default ranking if user history is unavailable
         pass

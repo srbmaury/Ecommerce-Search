@@ -1,16 +1,14 @@
-import csv
 from datetime import datetime
 
-from backend.utils.csv_lock import csv_lock
-from backend.utils.sanitize import sanitize_user_id, sanitize_csv_field
-from backend.user_manager import load_users
+from backend.utils.sanitize import sanitize_user_id
+from backend.db_user_manager import get_user_by_id
+from backend.db_event_service import create_search_event
+from backend.db_product_service import update_product_popularity
 from backend.services.retrain_trigger import record_event
-from backend.services.utils import update_product_popularity
-from utils.data_paths import get_data_path
 
 
 def log_event_controller(data):
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.utcnow()
 
     raw_user_id = data.get("user_id", "")
     user_id = sanitize_user_id(raw_user_id)
@@ -23,10 +21,9 @@ def log_event_controller(data):
 
     group = "A"
     try:
-        users = load_users()
-        user = next((u for u in users if u["user_id"] == user_id), None)
+        user = get_user_by_id(user_id)
         if user:
-            group = user.get("group", "A")
+            group = user.group or "A"
     except Exception:
         pass
 
@@ -34,17 +31,11 @@ def log_event_controller(data):
     product_id = data.get("product_id", "")
     query = data.get("query", "")
 
-    with csv_lock:
-        with open(get_data_path("search_events.csv"), "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                user_id,
-                sanitize_csv_field(query),
-                sanitize_csv_field(product_id),
-                sanitize_csv_field(event_type),
-                timestamp,
-                group
-            ])
+    # Log the event to database
+    try:
+        create_search_event(user_id, query, product_id, event_type, group)
+    except Exception:
+        pass
 
     # Popularity rule
     if event_type == "click" and product_id:
