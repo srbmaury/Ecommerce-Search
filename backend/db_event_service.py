@@ -97,7 +97,7 @@ def _escape_ilike_pattern(value):
     Escape special characters used in SQL ILIKE patterns.
 
     Escapes %, _ and \\ so that user input cannot change the pattern
-    semantics. Use together with escape='\\\\' in ilike().
+    semantics. Use together with escape='\\' in ilike().
     """
     if value is None:
         return ""

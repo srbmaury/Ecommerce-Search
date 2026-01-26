@@ -44,9 +44,11 @@ def _load_products():
     
     # Reload if:
     # 1. Products have never been loaded
-    # 2. Cache has expired (more than CACHE_DURATION_SECONDS old)
+    # 2. The cached DataFrame is empty
+    # 3. Cache has expired (more than CACHE_DURATION_SECONDS old)
     needs_reload = (
         products is None or 
+        getattr(products, "empty", False) or
         products_cache_time is None or
         (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
     )
