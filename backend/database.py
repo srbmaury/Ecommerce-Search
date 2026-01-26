@@ -23,15 +23,24 @@ def init_db():
     
     # Add SQLite-specific configuration for better transaction handling
     connect_args = {}
+    pool_size = 5
+    max_overflow = 10
+    
     if database_url.startswith('sqlite'):
         connect_args = {
             'check_same_thread': False,  # Allow multiple threads
             'timeout': 30  # Increase timeout for locked database
         }
+        # SQLite doesn't benefit from connection pooling
+        pool_size = 1
+        max_overflow = 0
     
     engine = create_engine(
         database_url,
         pool_pre_ping=True,  # Verify connections before using
+        pool_size=pool_size,  # Connection pool size
+        max_overflow=max_overflow,  # Max connections beyond pool_size
+        pool_recycle=3600,  # Recycle connections after 1 hour
         echo=False,  # Set to True for SQL debugging
         connect_args=connect_args
     )

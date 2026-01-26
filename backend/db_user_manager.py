@@ -33,8 +33,15 @@ def save_users(users_list):
     """
     session = get_db_session()
     try:
+        # Fetch all existing users at once to avoid N+1 queries
+        user_ids = [u["user_id"] for u in users_list]
+        existing_users = session.query(User).filter(User.user_id.in_(user_ids)).all()
+        existing_users_dict = {u.user_id: u for u in existing_users}
+        
         for user_data in users_list:
-            user = session.query(User).filter_by(user_id=user_data["user_id"]).first()
+            user_id = user_data["user_id"]
+            user = existing_users_dict.get(user_id)
+            
             if user:
                 # Update existing user
                 user.username = user_data.get("username", user.username)

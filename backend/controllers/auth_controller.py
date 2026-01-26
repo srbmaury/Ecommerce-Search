@@ -26,16 +26,22 @@ def signup_controller(data):
     if not ok:
         return jsonify({"error": err}), 400
 
-    # Check if username exists
-    existing_user = get_user_by_username(username)
-    if existing_user:
-        return jsonify({"error": "username exists"}), 400
-
     # Generate unique user_id using UUID to avoid race conditions
     user_id = f"u{uuid.uuid4().hex[:12]}"
     group = random.choice(["A", "B"])
     
-    user = create_user(user_id, username, hash_password(password), group)
+    try:
+        # Check if username exists
+        existing_user = get_user_by_username(username)
+        if existing_user:
+            return jsonify({"error": "username exists"}), 400
+        
+        user = create_user(user_id, username, hash_password(password), group)
+    except Exception as e:
+        # Handle unique constraint violations (race condition)
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return jsonify({"error": "username exists"}), 400
+        raise
     
     return jsonify({
         "user_id": user.user_id,

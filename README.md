@@ -136,37 +136,6 @@ Save this as `load_products.py` and run:
 python load_products.py
 ```
 
-#### Migrating from Previous CSV-Based Version
-
-If you're upgrading from a previous version that used CSV files, create a migration script:
-
-```python
-import pandas as pd
-from backend.database import init_db
-from backend.db_product_service import create_product
-
-# Initialize database
-init_db()
-
-# Read old CSV file
-products_df = pd.read_csv('data/products.csv')
-
-# Load products into database
-for _, row in products_df.iterrows():
-    create_product(
-        product_id=str(row['product_id']),
-        title=row['title'],
-        description=row.get('description', ''),
-        category=row.get('category', ''),
-        price=float(row['price']),
-        rating=float(row.get('rating', 0)),
-        review_count=int(row.get('review_count', 0)),
-        popularity=int(row.get('popularity', 0))
-    )
-
-print(f"Migrated {len(products_df)} products")
-```
-
 ### 5. Train the Ranking Model
 ```bash
 python ml/train_ranker.py
@@ -334,5 +303,41 @@ Once the frontend is running:
 
 ---
 
-## Credits
-Built with Flask, React, Vite, scikit-learn, and pandas.
+## Performance & Optimization
+
+### Caching
+- **Product Cache:** Products are cached for 5 minutes to reduce database load
+- **Connection Pooling:** PostgreSQL uses connection pool (size: 5, max overflow: 10)
+- **Efficient Queries:** Uses indexed columns and batch operations to minimize N+1 queries
+
+### Database Indexes
+- User: `user_id`, `username`, `cluster`
+- Product: `product_id`, `category`, `popularity`, composite index on `(category, price)`
+- SearchEvent: `user_id`, `event_type`, `timestamp`, `group`, composite indexes for analytics
+
+### Scalability Considerations
+- JSON column for cart (efficient for small-medium datasets)
+- Event table will grow large over time - consider archiving old events (>6 months)
+- For very large catalogs (>100k products), consider adding full-text search (PostgreSQL's `tsvector`)
+
+---
+
+## Security Notes
+
+### Current Implementation
+- ✅ Password hashing with bcrypt
+- ✅ Input validation and sanitization
+- ✅ SQL injection protection (parameterized queries via SQLAlchemy)
+- ✅ Foreign key constraints with CASCADE for data integrity
+- ✅ Environment-based configuration (DATABASE_URL not hardcoded)
+
+### Production Recommendations
+- 🔒 Add rate limiting for auth endpoints (consider `flask-limiter`)
+- 🔒 Use HTTPS in production
+- 🔒 Set secure session cookies (`SESSION_COOKIE_SECURE=True`)
+- 🔒 Enable CSRF protection for state-changing operations
+- 🔒 Implement request logging and monitoring
+- 🔒 Regularly backup database and rotate credentials
+
+---
+
