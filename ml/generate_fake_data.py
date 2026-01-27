@@ -12,12 +12,25 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from backend.database import get_db_session, init_db, create_tables
-from backend.models import User, Product
+from backend.models import User, Product, SearchEvent
+from backend.services.security import hash_password
 
 
 API = "http://localhost:5000"
 USER_COUNT = 30
 EVENTS_PER_USER = 40
+
+# Check if API is available
+def is_api_available():
+    """Check if the backend API is running."""
+    try:
+        response = requests.get(f"{API}/search?q=test&user_id=test", timeout=2)
+        return True
+    except:
+        return False
+
+USE_API = is_api_available()
+print(f"🌐 API Mode: {'Enabled' if USE_API else 'Disabled (using direct database)'}")
 
 # ----------------------------
 # Initialize database
@@ -140,23 +153,94 @@ print(f"🔍 Using {len(SEARCH_TERMS)} unique search terms")
 # Auth helpers
 # ----------------------------
 def signup_and_login(username, password):
-    r = requests.post(f"{API}/signup", json={
-        "username": username,
-        "password": password
-    })
+    """Sign up or login a user. Works with both API and direct database."""
+    if USE_API:
+        # Try API signup
+        r = requests.post(f"{API}/signup", json={
+            "username": username,
+            "password": password
+        })
 
-    if r.status_code == 200 and "user_id" in r.json():
-        return r.json()["user_id"]
+        if r.status_code == 200 and "user_id" in r.json():
+            return r.json()["user_id"]
 
-    r = requests.post(f"{API}/login", json={
-        "username": username,
-        "password": password
-    })
+        # Try API login
+        r = requests.post(f"{API}/login", json={
+            "username": username,
+            "password": password
+        })
 
-    if r.status_code == 200 and "user_id" in r.json():
-        return r.json()["user_id"]
+        if r.status_code == 200 and "user_id" in r.json():
+            return r.json()["user_id"]
 
-    return None
+        return None
+    else:
+        # Direct database access
+        session = get_db_session()
+        try:
+            # Check if user exists
+            existing_user = session.query(User).filter_by(username=username).first()
+            if existing_user:
+                return existing_user.user_id
+            
+            # Create new user
+            user_count = session.query(User).count()
+            user_id = f"u{random.randint(100000, 999999)}"
+            group = random.choice(["A", "B"])
+            
+            new_user = User(
+                user_id=user_id,
+                username=username,
+                password_hash=hash_password(password),
+                group=group,
+                cart={}
+            )
+            session.add(new_user)
+            session.commit()
+            return user_id
+        except Exception as e:
+            print(f"Error creating user {username}: {e}")
+            session.rollback()
+            return None
+        finally:
+            session.close()
+
+def log_event_to_db(user_id, query, product_id, event_type):
+    """Log an event directly to the database."""
+    session = get_db_session()
+    try:
+        user = session.query(User).filter_by(user_id=user_id).first()
+        group = user.group if user else "A"
+        
+        event = SearchEvent(
+            user_id=user_id,
+            query=query,
+            product_id=str(product_id),
+            event_type=event_type,
+            group=group
+        )
+        session.add(event)
+        session.commit()
+    except Exception as e:
+        session.rollback()
+    finally:
+        session.close()
+
+def add_to_cart_db(user_id, product_id):
+    """Add product to cart directly in database."""
+    session = get_db_session()
+    try:
+        user = session.query(User).filter_by(user_id=user_id).first()
+        if user:
+            cart = user.cart or {}
+            product_id_str = str(product_id)
+            cart[product_id_str] = cart.get(product_id_str, 0) + 1
+            user.cart = cart
+            session.commit()
+    except Exception as e:
+        session.rollback()
+    finally:
+        session.close()
 
 # ----------------------------
 # User behavior simulation
@@ -172,41 +256,60 @@ def simulate_user(user_id):
         else:
             query = product["category"].lower()
 
-        # Search
-        requests.get(
-            f"{API}/search",
-            params={"q": query, "user_id": user_id}
-        )
+        if USE_API:
+            # Search
+            requests.get(
+                f"{API}/search",
+                params={"q": query, "user_id": user_id}
+            )
 
-        # Click
-        requests.post(
-            f"{API}/event",
-            json={
-                "user_id": user_id,
-                "query": query,
-                "product_id": product_id,
-                "event": "click"
-            }
-        )
+            # Click
+            requests.post(
+                f"{API}/event",
+                json={
+                    "user_id": user_id,
+                    "query": query,
+                    "product_id": product_id,
+                    "event": "click"
+                }
+            )
 
-        # Add to cart (30%)
-        if random.random() < 0.3:
-            # Sometimes add multiple quantities (20% chance of 2-3 items)
-            quantity = 1
-            if random.random() < 0.2:
-                quantity = random.randint(2, 3)
+            # Add to cart (30%)
+            if random.random() < 0.3:
+                # Sometimes add multiple quantities (20% chance of 2-3 items)
+                quantity = 1
+                if random.random() < 0.2:
+                    quantity = random.randint(2, 3)
+                
+                for _ in range(quantity):
+                    requests.post(
+                        f"{API}/cart",
+                        json={
+                            "user_id": user_id,
+                            "product_id": product_id,
+                            "query": query
+                        }
+                    )
+
+            time.sleep(random.uniform(0.03, 0.08))
+        else:
+            # Direct database access
+            # Log click event
+            log_event_to_db(user_id, query, product_id, "click")
             
-            for _ in range(quantity):
-                requests.post(
-                    f"{API}/cart",
-                    json={
-                        "user_id": user_id,
-                        "product_id": product_id,
-                        "query": query
-                    }
-                )
-
-        time.sleep(random.uniform(0.03, 0.08))
+            # Add to cart (30%)
+            if random.random() < 0.3:
+                # Sometimes add multiple quantities (20% chance of 2-3 items)
+                quantity = 1
+                if random.random() < 0.2:
+                    quantity = random.randint(2, 3)
+                
+                for _ in range(quantity):
+                    log_event_to_db(user_id, query, product_id, "add_to_cart")
+                    add_to_cart_db(user_id, product_id)
+            
+            # Small delay to simulate realistic behavior
+            time.sleep(random.uniform(0.01, 0.02))
 
 # ----------------------------
 # Main
