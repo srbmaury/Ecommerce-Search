@@ -9,6 +9,7 @@ from backend.db_user_manager import load_users
 from backend.db_product_service import get_products_df
 from backend.db_event_service import get_events_df
 import difflib
+import threading
 import json
 
 # Fuzzy matching threshold for search queries
@@ -37,33 +38,52 @@ products_cache_time = None
 CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 
+_products_lock = threading.Lock()
+
 def _load_products():
-    """Lazy load products and build vectorizer with time-based cache invalidation."""
+    """
+    Thread-safe lazy load products, vectorizer, and TF-IDF matrix with time-based cache invalidation.
+    
+    Uses double-checked locking pattern to avoid race conditions while maintaining performance:
+    1. Quick check without lock (fast path for cache hits)
+    2. Acquire lock only when reload is needed
+    3. Double-check after acquiring lock (another thread may have reloaded)
+    
+    Returns:
+        tuple: (products_df, vectorizer, tfidf_matrix)
+    """
     global products, vectorizer, tfidf_matrix, products_cache_time
+    
+    # Quick check without lock (fast path)
     current_time = datetime.now(timezone.utc)
+    if (products is not None and 
+        not getattr(products, "empty", False) and
+        products_cache_time is not None and
+        (current_time - products_cache_time).total_seconds() <= CACHE_DURATION_SECONDS):
+        return products, vectorizer, tfidf_matrix
     
-    # Reload if:
-    # 1. Products have never been loaded
-    # 2. The cached DataFrame is empty
-    # 3. Cache has expired (more than CACHE_DURATION_SECONDS old)
-    needs_reload = (
-        products is None or 
-        getattr(products, "empty", False) or
-        products_cache_time is None or
-        (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
-    )
+    # Reload with lock (slow path)
+    with _products_lock:
+        # Double-check after acquiring lock
+        current_time = datetime.now(timezone.utc)
+        needs_reload = (
+            products is None or 
+            getattr(products, "empty", False) or
+            products_cache_time is None or
+            (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
+        )
+        
+        if needs_reload:
+            products = get_products_df()
+            products_cache_time = current_time
+            if products is not None and not products.empty:
+                if "created_at" in products.columns:
+                    products["created_at"] = pd.to_datetime(products["created_at"])
+                vectorizer, tfidf_matrix = build_vectorizer(products)
+            else:
+                vectorizer = None
+                tfidf_matrix = None
     
-    if needs_reload:
-        products = get_products_df()
-        products_cache_time = current_time
-        if not products.empty:
-            products["created_at"] = pd.to_datetime(products["created_at"])
-            texts = (products["title"] + " " + products["description"]).tolist()
-            vectorizer, tfidf_matrix = build_vectorizer(texts)
-        else:
-            # If products is empty, reset vectorizer and matrix to None
-            vectorizer = None
-            tfidf_matrix = None
     return products, vectorizer, tfidf_matrix
 
 def user_category_score(profile, category):
@@ -86,22 +106,36 @@ def user_price_affinity(profile, price):
 PROFILE_REFRESH_SECONDS = 300  # how often to refresh user profiles from source data
 _user_profiles = None
 _user_profiles_last_refresh = None
+_user_profiles_lock = threading.Lock()
 
 def get_user_profile(user_id):
     """
-    Return the profile for the given user, refreshing the cached profiles
-    periodically so that new behavior is reflected in search rankings.
+    Thread-safe function to return the profile for the given user, 
+    refreshing the cached profiles periodically so that new behavior 
+    is reflected in search rankings.
+    
+    Uses double-checked locking pattern to avoid race conditions.
     """
     global _user_profiles, _user_profiles_last_refresh
 
+    # Quick check without lock (fast path)
     now = datetime.now(timezone.utc)
-    if (
-        _user_profiles is None
-        or _user_profiles_last_refresh is None
-        or (now - _user_profiles_last_refresh).total_seconds() > PROFILE_REFRESH_SECONDS
-    ):
-        _user_profiles = build_user_profiles()
-        _user_profiles_last_refresh = now
+    if (_user_profiles is not None and
+        _user_profiles_last_refresh is not None and
+        (now - _user_profiles_last_refresh).total_seconds() <= PROFILE_REFRESH_SECONDS):
+        return _user_profiles.get(user_id) if _user_profiles else None
+
+    # Reload with lock (slow path)
+    with _user_profiles_lock:
+        # Double-check after acquiring lock
+        now = datetime.now(timezone.utc)
+        if (
+            _user_profiles is None
+            or _user_profiles_last_refresh is None
+            or (now - _user_profiles_last_refresh).total_seconds() > PROFILE_REFRESH_SECONDS
+        ):
+            _user_profiles = build_user_profiles()
+            _user_profiles_last_refresh = now
 
     if _user_profiles is None:
         return None

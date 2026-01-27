@@ -3,7 +3,7 @@ from datetime import datetime
 from backend.utils.sanitize import sanitize_user_id
 from backend.db_user_manager import get_user_by_id, update_user_cart
 from backend.db_event_service import create_search_event
-from backend.db_product_service import get_products_df, update_product_popularity, get_products_by_ids
+from backend.db_product_service import update_product_popularity, get_products_by_ids
 from backend.services.retrain_trigger import record_event
 
 def add_to_cart_controller(data):
@@ -68,7 +68,8 @@ def get_cart_controller(raw_user_id):
             # Convert old list format to dict format if needed
             if isinstance(cart_data, list):
                 cart_data = {str(pid): 1 for pid in cart_data}
-    except Exception:        # If user lookup fails, return empty cart        
+    except Exception:
+        # If user lookup fails, return empty cart
         pass
 
     cart_items = []

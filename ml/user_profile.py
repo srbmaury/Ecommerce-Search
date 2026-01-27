@@ -1,7 +1,3 @@
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import pandas as pd
 from backend.db_event_service import get_events_df
 from backend.db_product_service import get_products_df

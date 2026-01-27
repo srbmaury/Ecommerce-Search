@@ -1,6 +1,3 @@
-import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from ml.user_clustering import cluster_users
 from backend.db_user_manager import get_db_session
 from backend.models import User

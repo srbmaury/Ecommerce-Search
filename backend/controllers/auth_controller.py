@@ -31,14 +31,9 @@ def signup_controller(data):
     group = random.choice(["A", "B"])
     
     try:
-        # Check if username exists
-        existing_user = get_user_by_username(username)
-        if existing_user:
-            return jsonify({"error": "username exists"}), 400
-        
         user = create_user(user_id, username, hash_password(password), group)
     except Exception as e:
-        # Handle unique constraint violations (race condition)
+        # Handle unique constraint violations
         if "unique" in str(e).lower() or "duplicate" in str(e).lower():
             return jsonify({"error": "username exists"}), 400
         raise
@@ -58,11 +53,15 @@ def login_controller(data):
         return jsonify({"error": "username and password required"}), 400
 
     user = get_user_by_username(username)
-    if not user:
-        return jsonify({"error": "invalid credentials"}), 401
+    # Always perform bcrypt to prevent timing attacks
+    if user:
+        password_valid = bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
+    else:
+        # Dummy hash check to maintain constant time
+        bcrypt.checkpw(password.encode("utf-8"), bcrypt.hashpw(b"dummy", bcrypt.gensalt()).encode("utf-8"))
+        password_valid = False
 
-    # Verify password
-    if not bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8")):
+    if not user or not password_valid:
         return jsonify({"error": "invalid credentials"}), 401
 
     return jsonify({

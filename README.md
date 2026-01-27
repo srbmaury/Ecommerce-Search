@@ -91,7 +91,7 @@ python -m backend.app
 
 # Terminal 2: Generate data
 source venv/bin/activate
-python ml/generate_fake_data.py
+python -m ml.generate_fake_data
 ```
 
 This creates:
@@ -113,7 +113,6 @@ init_db()
 # Add your products
 products_data = [
     {
-        'product_id': '1',
         'title': 'Product Name',
         'description': 'Product description',
         'category': 'Category Name',
@@ -138,14 +137,14 @@ python load_products.py
 
 ### 5. Train the Ranking Model
 ```bash
-python ml/train_ranker.py
+python -m ml.train_ranker
 ```
 - Trains the ML model using data from the database
 - Saves the model for use in ranking
 
 ### 6. Cluster Users (User Segmentation)
 ```bash
-python ml/assign_user_clusters.py
+python -m ml.assign_user_clusters
 ```
 - Assigns each user to a cluster based on their behavior
 - Clusters are stored in the database
@@ -312,7 +311,7 @@ Once the frontend is running:
 
 ### Database Indexes
 - User: `user_id`, `username`, `cluster`
-- Product: `product_id`, `category`, `popularity`, composite index on `(category, price)`
+- Product: `id` (auto-increment), `category`, `popularity`, composite index on `(category, price)`
 - SearchEvent: `user_id`, `event_type`, `timestamp`, `group`, composite indexes for analytics
 
 ### Scalability Considerations

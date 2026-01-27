@@ -1,7 +1,6 @@
 import requests
 import random
 import time
-import sys
 from collections import defaultdict
 import os
 from dotenv import load_dotenv
@@ -9,11 +8,8 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
-# Add parent directory to path for database imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from backend.database import get_db_session, init_db, create_tables
-from backend.models import User, Product, SearchEvent
+from backend.models import User, Product
 
 
 API = "http://localhost:5000"
@@ -63,7 +59,7 @@ try:
     
     for product in db_products:
         products.append({
-            "product_id": product.product_id,
+            "product_id": product.id,
             "title": product.title,
             "category": product.category
         })

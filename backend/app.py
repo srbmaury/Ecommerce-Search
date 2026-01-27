@@ -22,12 +22,18 @@ logger = logging.getLogger(__name__)
 def create_app():
     # Initialize database
     try:
-        logger.info("Initializing database...")
+        logger.info("Initializing database connection...")
         init_db()
+        logger.info("Database connection established")
+        
+        logger.info("Creating database tables...")
         create_tables()
-        logger.info("Database initialized successfully")
+        logger.info("Database tables created successfully")
+    except SQLAlchemyError as e:
+        logger.error(f"Database error during initialization: {e}")
+        raise
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Unexpected error during database initialization: {e}")
         raise
 
     # Serve static files from the frontend directory

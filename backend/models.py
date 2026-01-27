@@ -13,13 +13,12 @@ class User(Base):
     """User model with authentication and cart information."""
     __tablename__ = 'users'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(String(50), unique=True, nullable=False, index=True)
+    user_id = Column(String(50), primary_key=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     group = Column(String(10), default='A')  # A/B testing group
     cluster = Column(Integer, nullable=True, index=True)  # User cluster for recommendations
-    cart = Column(JSON, default=dict)  # Cart as JSON: {product_id: quantity}
+    cart = Column(JSON, default=lambda: {})  # Cart as JSON: {product_id: quantity}
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
@@ -34,8 +33,7 @@ class Product(Base):
     """Product model with all product information."""
     __tablename__ = 'products'
     
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    product_id = Column(String(50), unique=True, nullable=False, index=True)
+    id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     title = Column(String(500), nullable=False)
     description = Column(Text, nullable=True)
     category = Column(String(100), nullable=True, index=True)
@@ -53,7 +51,7 @@ class Product(Base):
     )
     
     def __repr__(self):
-        return f"<Product(product_id='{self.product_id}', title='{self.title}')>"
+        return f"<Product(id={self.id}, title='{self.title}')>"
 
 
 class SearchEvent(Base):
@@ -63,7 +61,7 @@ class SearchEvent(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(String(50), ForeignKey('users.user_id', ondelete='CASCADE', onupdate='CASCADE'), nullable=False, index=True)
     query = Column(String(500), nullable=True, index=True)
-    product_id = Column(String(50), nullable=True, index=True)
+    product_id = Column(Integer, nullable=True, index=True)  # References Product.id
     event_type = Column(String(50), nullable=False, index=True)  # click, add_to_cart, search
     timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     group = Column(String(10), nullable=True, index=True)  # A/B testing group at time of event

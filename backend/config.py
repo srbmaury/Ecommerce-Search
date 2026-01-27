@@ -1,6 +1,10 @@
 import os
+import logging
 from urllib.parse import urlparse, urlunparse
 from flask_cors import CORS
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 def configure_cors(app):
     origins = os.getenv("ALLOWED_ORIGINS")
@@ -33,6 +37,7 @@ def get_database_url():
     # Handle postgres:// URLs (convert to postgresql:// for SQLAlchemy)
     # Use proper URL parsing to preserve query parameters and other components
     if database_url.startswith("postgres://"):
+        logger.info("Converting postgres:// URL to postgresql:// for SQLAlchemy compatibility")
         parsed = urlparse(database_url)
         # Reconstruct with postgresql scheme while preserving all other components
         database_url = urlunparse((

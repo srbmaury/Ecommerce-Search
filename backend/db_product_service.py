@@ -13,7 +13,7 @@ def get_all_products():
     try:
         products = session.query(Product).all()
         return [{
-            'product_id': p.product_id,
+            'product_id': p.id,  # Return as product_id for API compatibility
             'title': p.title,
             'description': p.description,
             'category': p.category,
@@ -33,8 +33,6 @@ def get_products_df():
     if not products:
         return pd.DataFrame()
     df = pd.DataFrame(products)
-    # Convert product_id to int for compatibility
-    df['product_id'] = df['product_id'].astype(int)
     if 'created_at' in df.columns:
         df['created_at'] = pd.to_datetime(df['created_at'])
     return df
@@ -44,7 +42,7 @@ def get_product_by_id(product_id):
     """Get a single product by ID."""
     session = get_db_session()
     try:
-        return session.query(Product).filter_by(product_id=str(product_id)).first()
+        return session.query(Product).filter_by(id=int(product_id)).first()
     finally:
         session.close()
 
@@ -53,7 +51,7 @@ def update_product_popularity(product_id, increment):
     """Update product popularity by incrementing."""
     session = get_db_session()
     try:
-        product = session.query(Product).filter_by(product_id=str(product_id)).first()
+        product = session.query(Product).filter_by(id=int(product_id)).first()
         if product:
             product.popularity += increment
             session.commit()
@@ -94,13 +92,13 @@ def get_products_by_ids(product_ids):
     """Get multiple products by their IDs."""
     session = get_db_session()
     try:
-        # Convert all product_ids to strings for comparison
-        str_product_ids = [str(pid) for pid in product_ids]
+        # Convert all product_ids to integers
+        int_product_ids = [int(pid) for pid in product_ids]
         products = session.query(Product).filter(
-            Product.product_id.in_(str_product_ids)
+            Product.id.in_(int_product_ids)
         ).all()
         return [{
-            'product_id': int(p.product_id),
+            'product_id': p.id,
             'title': p.title,
             'description': p.description,
             'category': p.category,
@@ -114,12 +112,11 @@ def get_products_by_ids(product_ids):
         session.close()
 
 
-def create_product(product_id, title, description, category, price, rating=0, review_count=0, popularity=0):
+def create_product(title, description, category, price, rating=0, review_count=0, popularity=0):
     """Create a new product."""
     session = get_db_session()
     try:
         product = Product(
-            product_id=str(product_id),
             title=title,
             description=description,
             category=category,

@@ -27,7 +27,7 @@ def retrain_model():
     try:
         logger.info("Retraining ML model...")
         subprocess.run(
-            [sys.executable, os.path.join(PROJECT_ROOT, "ml/train_ranker.py")],
+            [sys.executable, "-m", "ml.train_ranker"],
             check=True,
             cwd=PROJECT_ROOT
         )
@@ -44,7 +44,7 @@ def retrain_clusters():
     try:
         logger.info("Updating user clusters...")
         subprocess.run(
-            [sys.executable, os.path.join(PROJECT_ROOT, "ml/assign_user_clusters.py")],
+            [sys.executable, "-m", "ml.assign_user_clusters"],
             check=True,
             cwd=PROJECT_ROOT
         )

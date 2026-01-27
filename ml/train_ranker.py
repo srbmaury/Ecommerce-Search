@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
-import sys
-import os
-# Add parent directory to path to allow imports from backend module
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from user_profile import build_user_profiles
-from features import build_features
+from ml.user_profile import build_user_profiles
+from ml.features import build_features
 from sklearn.linear_model import LogisticRegression
 import pandas as pd
 import joblib
+import os
 from backend.search import user_category_score, user_price_affinity
 from backend.db_product_service import get_products_df
 from backend.db_event_service import get_events_df

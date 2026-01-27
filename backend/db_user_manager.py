@@ -73,22 +73,23 @@ def save_users(users_list):
 
 
 def get_user_by_id(user_id):
-    """
-    Get a user by user_id.
-    
-    Returns a detached User object with all scalar attributes loaded.
-    Relationships (like search_events) are not loaded and will raise an error if accessed.
-    """
     session = get_db_session()
     try:
         user = session.query(User).filter_by(user_id=user_id).first()
         if user:
-            # Expunge detaches the object while keeping loaded attributes accessible
-            session.expunge(user)
-        return user
+            return {
+                'user_id': user.user_id,
+                'username': user.username,
+                'password_hash': user.password_hash,
+                'group': user.group,
+                'cluster': user.cluster,
+                'cart': user.cart,
+                'created_at': user.created_at,
+                'updated_at': user.updated_at
+            }
+        return None
     finally:
         session.close()
-
 
 def get_user_by_username(username):
     """
