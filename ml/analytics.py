@@ -1,10 +1,9 @@
 import pandas as pd
-from utils.data_paths import get_data_path
+from backend.db_event_service import get_events_df
 
-def ab_analytics(events_path=None):
-    if events_path is None:
-        events_path = get_data_path("search_events.csv")
-    df = pd.read_csv(events_path)
+def ab_analytics():
+    """Analyze A/B test results from database."""
+    df = get_events_df()
     if 'group' not in df.columns:
         print("No group column in events. Cannot compute A/B analytics.")
         return

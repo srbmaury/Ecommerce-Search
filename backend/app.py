@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 from backend.config import configure_cors
 from backend.scheduler import start_scheduler
+from backend.database import init_db, create_tables
 
 from backend.routes.auth_routes import bp as auth_bp
 from backend.routes.search_routes import bp as search_bp
@@ -15,11 +16,29 @@ from backend.routes.recommendations_routes import bp as rec_bp
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def create_app():
+    # Initialize database
+    try:
+        logger.info("Initializing database connection...")
+        init_db()
+        logger.info("Database connection established")
+        
+        logger.info("Creating database tables...")
+        create_tables()
+        logger.info("Database tables created successfully")
+    except SQLAlchemyError as e:
+        logger.error(f"Database error during initialization: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"Unexpected error during database initialization: {e}")
+        raise
 
     # Serve static files from the frontend directory
     app = Flask(__name__, static_folder="../frontend", static_url_path="/static")
+    
     # Route for root URL to serve index.html
     @app.route("/")
     def index():
@@ -38,6 +57,7 @@ def create_app():
     run_scheduler = os.getenv("RUN_SCHEDULER", "1").lower() in ("1", "true", "yes")
     if run_scheduler:
         start_scheduler()
+    
     return app
 
 

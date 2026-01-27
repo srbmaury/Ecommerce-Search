@@ -1,12 +1,10 @@
 from datetime import datetime
-import csv
 
-from backend.utils.csv_lock import csv_lock
-from backend.utils.sanitize import sanitize_user_id, sanitize_csv_field
-from backend.user_manager import load_users, save_users
+from backend.utils.sanitize import sanitize_user_id
+from backend.db_user_manager import get_user_by_id, update_user_cart
+from backend.db_event_service import create_search_event
+from backend.db_product_service import update_product_popularity, get_products_by_ids
 from backend.services.retrain_trigger import record_event
-from backend.services.utils import get_products_df, update_product_popularity
-from utils.data_paths import get_data_path
 
 def add_to_cart_controller(data):
     raw_user_id = data.get("user_id")
@@ -23,33 +21,28 @@ def add_to_cart_controller(data):
     group = "A"
 
     try:
-        users = load_users()
-        user = next((u for u in users if u["user_id"] == user_id), None)
-        if user:
-            group = user.get("group", "A")
-            cart = user.get("cart", {})
-            # Convert old list format to dict format if needed
-            if isinstance(cart, list):
-                cart = {str(pid): 1 for pid in cart}
-            # Add or increment quantity
-            product_id_str = str(product_id)
-            cart[product_id_str] = cart.get(product_id_str, 0) + 1
-            user["cart"] = cart
-            save_users(users)
-    except Exception:
-        pass
+        user = get_user_by_id(user_id)
+        if not user:
+            return {"error": "user not found. Please login again."}, 404
+        
+        group = user.get('group') or "A"
+        cart = user.get('cart') or {}
+        # Convert old list format to dict format if needed
+        if isinstance(cart, list):
+            cart = {str(pid): 1 for pid in cart}
+        # Add or increment quantity
+        product_id_str = str(product_id)
+        cart[product_id_str] = cart.get(product_id_str, 0) + 1
+        update_user_cart(user_id, cart)
+    except Exception as e:
+        return {"error": f"Failed to update cart: {str(e)}"}, 500
 
-    with csv_lock:
-        with open(get_data_path("search_events.csv"), "a", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow([
-                user_id,
-                sanitize_csv_field(query),
-                sanitize_csv_field(product_id),
-                "add_to_cart",
-                datetime.now().isoformat(),
-                group
-            ])
+    # Log the event to database
+    try:
+        create_search_event(user_id, query, product_id, 'add_to_cart', group)
+    except Exception:
+        # If event logging fails, continue processing (non-critical)
+        pass
 
     update_product_popularity(product_id, 3)
 
@@ -70,28 +63,34 @@ def get_cart_controller(raw_user_id):
     cart_data = {}
 
     try:
-        users = load_users()
-        user = next((u for u in users if u["user_id"] == user_id), None)
+        user = get_user_by_id(user_id)
         if user:
-            cart_data = user.get("cart", {})
+            cart_data = user.get('cart') or {}
             # Convert old list format to dict format if needed
             if isinstance(cart_data, list):
                 cart_data = {str(pid): 1 for pid in cart_data}
     except Exception:
+        # If user lookup fails, return empty cart
         pass
 
-    products_df = get_products_df()
     cart_items = []
 
-    if not products_df.empty:
+    if cart_data:
+        # Only fetch products that are in the cart (more efficient than loading all products)
+        product_ids = list(cart_data.keys())
+        products_list = get_products_by_ids(product_ids)
+        
+        # Create a lookup dict for quick access
+        products_dict = {str(p['product_id']): p for p in products_list}
+        
         for pid, quantity in cart_data.items():
             try:
-                product = products_df[products_df["product_id"] == int(pid)]
-                if not product.empty:
-                    item = product.iloc[0].to_dict()
+                if pid in products_dict:
+                    item = products_dict[pid].copy()
                     item["quantity"] = quantity
                     cart_items.append(item)
             except Exception:
+                # Skip products that can't be loaded
                 continue
 
     total = sum(item.get("price", 0) * item.get("quantity", 1) for item in cart_items)
@@ -99,8 +98,9 @@ def get_cart_controller(raw_user_id):
 
     return {
         "items": cart_items,
-        "count": total_items,
-        "total": total
+        "total": total,
+        "total_items": total_items,
+        "count": total_items
     }, 200
 
 
@@ -116,10 +116,9 @@ def remove_from_cart_controller(data):
         return {"error": "invalid user_id"}, 400
 
     try:
-        users = load_users()
-        user = next((u for u in users if u["user_id"] == user_id), None)
+        user = get_user_by_id(user_id)
         if user:
-            cart = user.get("cart", {})
+            cart = user.get('cart') or {}
             # Convert old list format to dict format if needed
             if isinstance(cart, list):
                 cart = {str(pid): 1 for pid in cart}
@@ -129,9 +128,9 @@ def remove_from_cart_controller(data):
                     cart[product_id] -= 1
                 else:
                     del cart[product_id]
-                user["cart"] = cart
-                save_users(users)
+                update_user_cart(user_id, cart)
     except Exception:
+        # If cart update fails, silently ignore (non-critical operation)
         pass
 
     return {"status": "removed from cart"}, 200
@@ -148,12 +147,11 @@ def clear_cart_controller(data):
         return {"error": "invalid user_id"}, 400
 
     try:
-        users = load_users()
-        user = next((u for u in users if u["user_id"] == user_id), None)
+        user = get_user_by_id(user_id)
         if user:
-            user["cart"] = {}
-            save_users(users)
+            update_user_cart(user_id, {})
     except Exception:
+        # If cart clear fails, silently ignore (non-critical operation)
         pass
 
     return {"status": "cart cleared"}, 200

@@ -1,6 +1,6 @@
 import random
+import uuid
 import bcrypt
-import hashlib
 from flask import jsonify
 
 from backend.services.security import (
@@ -8,7 +8,10 @@ from backend.services.security import (
     validate_password,
     hash_password
 )
-from backend.user_manager import load_users, save_users
+from backend.db_user_manager import (
+    get_user_by_username, 
+    create_user
+)
 
 
 def signup_controller(data):
@@ -23,26 +26,22 @@ def signup_controller(data):
     if not ok:
         return jsonify({"error": err}), 400
 
-    users = load_users()
-    if any(u["username"] == username for u in users):
-        return jsonify({"error": "username exists"}), 400
-
-    user_id = f"u{len(users) + 1}"
+    # Generate unique user_id using UUID to avoid race conditions
+    user_id = f"u{uuid.uuid4().hex[:12]}"
     group = random.choice(["A", "B"])
-
-    users.append({
-        "user_id": user_id,
-        "username": username,
-        "password": hash_password(password),
-        "group": group
-    })
-
-    save_users(users)
-
+    
+    try:
+        user = create_user(user_id, username, hash_password(password), group)
+    except Exception as e:
+        # Handle unique constraint violations
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return jsonify({"error": "username exists"}), 400
+        raise
+    
     return jsonify({
-        "user_id": user_id,
-        "username": username,
-        "group": group
+        "user_id": user.user_id,
+        "username": user.username,
+        "group": user.group
     })
 
 
@@ -50,35 +49,23 @@ def login_controller(data):
     username = data.get("username")
     password = data.get("password")
 
-    ok, _ = validate_username(username)
-    if not ok:
-        return jsonify({"error": "invalid credentials"}), 401
+    if not username or not password:
+        return jsonify({"error": "username and password required"}), 400
 
-    ok, _ = validate_password(password, complexity=False)
-    if not ok:
-        return jsonify({"error": "invalid credentials"}), 401
+    user = get_user_by_username(username)
+    # Always perform bcrypt to prevent timing attacks
+    if user:
+        password_valid = bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
+    else:
+        # Dummy hash check to maintain constant time
+        bcrypt.checkpw(password.encode("utf-8"), bcrypt.hashpw(b"dummy", bcrypt.gensalt()).encode("utf-8"))
+        password_valid = False
 
-    users = load_users()
-    user = next((u for u in users if u["username"] == username), None)
-    if not user:
-        return jsonify({"error": "invalid credentials"}), 401
-
-    stored = user["password"]
-    valid = False
-
-    if stored.startswith("$2"):  # bcrypt
-        valid = bcrypt.checkpw(password.encode(), stored.encode())
-    else:  # legacy sha256
-        valid = hashlib.sha256(password.encode()).hexdigest() == stored
-        if valid:
-            user["password"] = hash_password(password)
-            save_users(users)
-
-    if not valid:
+    if not user or not password_valid:
         return jsonify({"error": "invalid credentials"}), 401
 
     return jsonify({
-        "user_id": user["user_id"],
-        "username": user["username"],
-        "group": user["group"]
+        "user_id": user.user_id,
+        "username": user.username,
+        "group": user.group
     })

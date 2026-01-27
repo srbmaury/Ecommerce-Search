@@ -1,15 +1,16 @@
 
 import pandas as pd
-from utils.data_paths import get_data_path
-import difflib
-import json
 from datetime import datetime, timezone
 from ml.user_profile import build_user_profiles
 from ml.features import build_features
 from ml.model import predict_score
 from ml.vectorizer import build_vectorizer
-from backend.user_manager import load_users
-from backend.utils.csv_lock import csv_lock
+from backend.db_user_manager import load_users
+from backend.db_product_service import get_products_df
+from backend.db_event_service import get_events_df
+import difflib
+import threading
+import json
 
 # Fuzzy matching threshold for search queries
 # A value of 0.7 means tokens must be at least 70% similar to match.
@@ -29,10 +30,61 @@ RECENT_BOOST_BASE = 1.0
 RECENT_BOOST_DECAY = 0.15
 CLUSTER_BOOST_WEIGHT = 0.5
 
-products = pd.read_csv(get_data_path("products.csv"))
-products["created_at"] = pd.to_datetime(products["created_at"])
-texts = (products["title"] + " " + products["description"]).tolist()
-vectorizer, tfidf_matrix = build_vectorizer(texts)
+# Global cache for products and vectorizer
+products = None
+vectorizer = None
+tfidf_matrix = None
+products_cache_time = None
+CACHE_DURATION_SECONDS = 300  # 5 minutes
+
+
+_products_lock = threading.Lock()
+
+def _load_products():
+    """
+    Thread-safe lazy load products, vectorizer, and TF-IDF matrix with time-based cache invalidation.
+    
+    Uses double-checked locking pattern to avoid race conditions while maintaining performance:
+    1. Quick check without lock (fast path for cache hits)
+    2. Acquire lock only when reload is needed
+    3. Double-check after acquiring lock (another thread may have reloaded)
+    
+    Returns:
+        tuple: (products_df, vectorizer, tfidf_matrix)
+    """
+    global products, vectorizer, tfidf_matrix, products_cache_time
+    
+    # Quick check without lock (fast path)
+    current_time = datetime.now(timezone.utc)
+    if (products is not None and 
+        not getattr(products, "empty", False) and
+        products_cache_time is not None and
+        (current_time - products_cache_time).total_seconds() <= CACHE_DURATION_SECONDS):
+        return products, vectorizer, tfidf_matrix
+    
+    # Reload with lock (slow path)
+    with _products_lock:
+        # Double-check after acquiring lock
+        current_time = datetime.now(timezone.utc)
+        needs_reload = (
+            products is None or 
+            getattr(products, "empty", False) or
+            products_cache_time is None or
+            (current_time - products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
+        )
+        
+        if needs_reload:
+            products = get_products_df()
+            products_cache_time = current_time
+            if products is not None and not products.empty:
+                if "created_at" in products.columns:
+                    products["created_at"] = pd.to_datetime(products["created_at"])
+                vectorizer, tfidf_matrix = build_vectorizer(products)
+            else:
+                vectorizer = None
+                tfidf_matrix = None
+    
+    return products, vectorizer, tfidf_matrix
 
 def user_category_score(profile, category):
     if profile and "category_pref" in profile:
@@ -54,22 +106,36 @@ def user_price_affinity(profile, price):
 PROFILE_REFRESH_SECONDS = 300  # how often to refresh user profiles from source data
 _user_profiles = None
 _user_profiles_last_refresh = None
+_user_profiles_lock = threading.Lock()
 
 def get_user_profile(user_id):
     """
-    Return the profile for the given user, refreshing the cached profiles
-    periodically so that new behavior is reflected in search rankings.
+    Thread-safe function to return the profile for the given user, 
+    refreshing the cached profiles periodically so that new behavior 
+    is reflected in search rankings.
+    
+    Uses double-checked locking pattern to avoid race conditions.
     """
     global _user_profiles, _user_profiles_last_refresh
 
+    # Quick check without lock (fast path)
     now = datetime.now(timezone.utc)
-    if (
-        _user_profiles is None
-        or _user_profiles_last_refresh is None
-        or (now - _user_profiles_last_refresh).total_seconds() > PROFILE_REFRESH_SECONDS
-    ):
-        _user_profiles = build_user_profiles()
-        _user_profiles_last_refresh = now
+    if (_user_profiles is not None and
+        _user_profiles_last_refresh is not None and
+        (now - _user_profiles_last_refresh).total_seconds() <= PROFILE_REFRESH_SECONDS):
+        return _user_profiles.get(user_id) if _user_profiles else None
+
+    # Reload with lock (slow path)
+    with _user_profiles_lock:
+        # Double-check after acquiring lock
+        now = datetime.now(timezone.utc)
+        if (
+            _user_profiles is None
+            or _user_profiles_last_refresh is None
+            or (now - _user_profiles_last_refresh).total_seconds() > PROFILE_REFRESH_SECONDS
+        ):
+            _user_profiles = build_user_profiles()
+            _user_profiles_last_refresh = now
 
     if _user_profiles is None:
         return None
@@ -78,9 +144,13 @@ def get_user_profile(user_id):
 
 def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
     """Search products by category when fuzzy search returns no results"""
+    products_df, _, _ = _load_products()
+    if products_df is None or products_df.empty:
+        return []
+    
     profile = get_user_profile(user_id)
 
-    filtered_products = [row for _, row in products.iterrows() if row.category == category]
+    filtered_products = [row for _, row in products_df.iterrows() if row.category == category]
 
     if ab_group == "B":
         return sorted([
@@ -123,6 +193,10 @@ def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
 
 
 def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
+    products_df, _, _ = _load_products()
+    if products_df is None or products_df.empty:
+        return []
+    
     profile = get_user_profile(user_id)
 
     # --- Filter products by fuzzy query match ---
@@ -137,7 +211,7 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
                     return True
         return False
 
-    filtered_products = [row for _, row in products.iterrows()
+    filtered_products = [row for _, row in products_df.iterrows()
         if fuzzy_match(str(row.title) + ' ' + str(row.description), query_words)]
 
     # --- A/B testing logic ---
@@ -179,15 +253,15 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
     # --- Get user's most recent product interactions ---
     recent_boost = {}
     try:
-        with csv_lock:
-            events = pd.read_csv(get_data_path("search_events.csv"), dtype={"product_id": str})
-        user_events = events[events.user_id == user_id]
-        user_events = user_events[user_events.event.isin(["click", "add_to_cart"])]
-        user_events = user_events.sort_values("timestamp", ascending=False)
-        for i, row in enumerate(user_events.head(5).itertuples()):
-            pid = int(row.product_id)
-            recent_boost[pid] = RECENT_BOOST_BASE - RECENT_BOOST_DECAY * i
-    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError, ValueError, KeyError):
+        events = get_events_df()
+        if not events.empty:
+            user_events = events[events.user_id == user_id]
+            user_events = user_events[user_events.event.isin(["click", "add_to_cart"])]
+            user_events = user_events.sort_values("timestamp", ascending=False)
+            for i, row in enumerate(user_events.head(5).itertuples()):
+                pid = int(row.product_id)
+                recent_boost[pid] = RECENT_BOOST_BASE - RECENT_BOOST_DECAY * i
+    except Exception:
         # Silently ignore errors when loading recent user interactions - recent boost is optional
         # and search should continue with default ranking if user history is unavailable
         pass

@@ -1,20 +1,20 @@
 import pandas as pd
-from backend.user_manager import load_users
-from backend.utils.csv_lock import csv_lock
-from utils.data_paths import get_data_path
-
+from backend.db_user_manager import load_users
+from backend.db_event_service import get_events_df
+from backend.services.utils import get_products_cached
 from backend.services.user_profile_service import get_profiles
 from ml.features import build_features
 from ml.model import predict_score
-
-# Load once (read-only)
-products = pd.read_csv(get_data_path("products.csv"))
-products["created_at"] = pd.to_datetime(products["created_at"])
 
 
 def recommendations_controller(user_id):
     if not user_id:
         return {"error": "user_id required"}, 400
+
+    # Get products
+    products_df = get_products_cached()
+    if products_df is None or products_df.empty:
+        return {"recent": [], "similar": []}, 200
 
     # ---- user cluster ----
     cluster = None
@@ -29,11 +29,7 @@ def recommendations_controller(user_id):
 
     # ---- recent interactions ----
     try:
-        with csv_lock:
-            events = pd.read_csv(
-                get_data_path("search_events.csv"),
-                dtype={"user_id": str}
-            )
+        events = get_events_df()
 
         user_events = events[
             (events.user_id == str(user_id)) &
@@ -50,7 +46,7 @@ def recommendations_controller(user_id):
     if not recent_ids:
         return {"recent": [], "similar": []}, 200
 
-    recent = products[products.product_id.isin(recent_ids)].to_dict("records")
+    recent = products_df[products_df.product_id.isin(recent_ids)].to_dict("records")
 
     # ---- profiles ----
     profiles = get_profiles()
@@ -80,7 +76,7 @@ def recommendations_controller(user_id):
     seen = set(recent_ids)
     candidates = []
 
-    for _, row in products.iterrows():
+    for _, row in products_df.iterrows():
         pid = int(row.product_id)
         if pid in seen:
             continue

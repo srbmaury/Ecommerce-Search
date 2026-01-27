@@ -3,19 +3,17 @@ import json
 import collections
 import pandas as pd
 from flask import jsonify
-from utils.data_paths import get_data_path
-from backend.user_manager import USERS_FILE
+from backend.db_event_service import get_events_df
+from backend.db_user_manager import get_db_session
+from backend.models import User
 from backend.services.analytics_html import build_html
 
 
 def get_analytics_data():
-    analytics_path = get_data_path("search_events.csv")
-
-    if not os.path.exists(analytics_path):
-        return jsonify({"error": "Analytics data not available"}), 404
-
     try:
-        events = pd.read_csv(analytics_path)
+        events = get_events_df()
+        if events.empty:
+            return jsonify({"error": "Analytics data not available"}), 404
     except Exception:
         return jsonify({"error": "Failed to read analytics data"}), 500
 
@@ -36,13 +34,15 @@ def get_analytics_data():
             "Conversion": round(carts / searches, 3) if searches else 0,
         }
 
-    cluster_counts = {}
-    if os.path.exists(USERS_FILE):
-        with open(USERS_FILE) as f:
-            users = json.load(f)
-            cluster_counts = collections.Counter(
-                u.get("cluster", -1) for u in users
-            )
+    # Get cluster counts from database
+    session = get_db_session()
+    try:
+        users = session.query(User).all()
+        cluster_counts = collections.Counter(
+            u.cluster if u.cluster is not None else -1 for u in users
+        )
+    finally:
+        session.close()
 
     top_queries = events["query"].value_counts().head(10)
 

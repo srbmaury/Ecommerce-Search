@@ -1,55 +1,75 @@
-import csv
-
 import requests
 import random
 import time
-import sys
 from collections import defaultdict
 import os
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+from backend.database import get_db_session, init_db, create_tables
+from backend.models import User, Product
 
 
 API = "http://localhost:5000"
-CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else "data/products.csv"
-EVENTS_FILE = "data/search_events.csv"
-USERS_FILE = "backend/users.json"
 USER_COUNT = 30
 EVENTS_PER_USER = 40
 
-# Clear users.json and search_events.csv before starting
-print("🧹 Clearing existing data...")
-os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
-with open(USERS_FILE, "w", encoding="utf-8") as f:
-    f.write("[]")
-
-os.makedirs(os.path.dirname(EVENTS_FILE), exist_ok=True)
-with open(EVENTS_FILE, "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow(["user_id", "query", "product_id", "event", "timestamp", "group"])
+# ----------------------------
+# Initialize database
+# ----------------------------
+print("🔧 Initializing database...")
+init_db()
+create_tables()
 
 # ----------------------------
-# Load products from CSV (create if missing)
+# Clear existing test data from database
 # ----------------------------
+print("🧹 Clearing existing test data from database...")
+session = get_db_session()
+try:
+    # Delete test users and their events (cascade will handle events)
+    test_users = session.query(User).filter(User.username.like('testuser%')).all()
+    if test_users:
+        for user in test_users:
+            session.delete(user)
+        session.commit()
+        print(f"✓ Cleared {len(test_users)} test users")
+except Exception as e:
+    print(f"⚠️  Error clearing data: {e}")
+    session.rollback()
+finally:
+    session.close()
+
+# ----------------------------
+# Load products from database
+# ----------------------------
+print("📦 Loading products from database...")
 products = []
 category_keywords = defaultdict(list)
 
-if not os.path.exists(CSV_FILE):
-    os.makedirs(os.path.dirname(CSV_FILE), exist_ok=True)
-    with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["product_id", "title", "description", "category", "price", "rating", "review_count", "popularity", "created_at"])
-
-with open(CSV_FILE, newline="", encoding="utf-8") as f:
-    reader = csv.DictReader(f)
-    for row in reader:
+session = get_db_session()
+try:
+    db_products = session.query(Product).all()
+    
+    if not db_products:
+        print("❌ No products found in database!")
+        sys.exit(1)
+    
+    for product in db_products:
         products.append({
-            "product_id": row["product_id"],
-            "title": row["title"],
-            "category": row["category"]
+            "product_id": product.id,
+            "title": product.title,
+            "category": product.category
         })
         # Build search keywords - extract only brand names (first word of title)
-        brand = row["title"].split()[0] if row["title"] else ""
+        brand = product.title.split()[0] if product.title else ""
         if brand and len(brand) > 2:
-            category_keywords[row["category"]].append(brand.lower())
+            category_keywords[product.category].append(brand.lower())
+
+finally:
+    session.close()
 
 PRODUCT_IDS = [p["product_id"] for p in products]
 
@@ -68,6 +88,9 @@ SEARCH_TERMS = brand_terms + [cat.lower() for cat in categories]
 
 # Filter out any terms that look like product IDs (contain hyphens and numbers)
 SEARCH_TERMS = [term for term in SEARCH_TERMS if not any(char.isdigit() for char in term)]
+
+print(f"📦 Loaded {len(products)} products from database")
+print(f"🔍 Using {len(SEARCH_TERMS)} unique search terms")
 
 # ----------------------------
 # Auth helpers
@@ -145,15 +168,19 @@ def simulate_user(user_id):
 # Main
 # ----------------------------
 if __name__ == "__main__":
-    print(f"📦 Loaded {len(products)} products from {CSV_FILE}")
-    print(f"🔍 Using {len(SEARCH_TERMS)} unique search terms")
-
+    print("\n🚀 Starting fake data generation...")
+    print(f"   Creating {USER_COUNT} users with {EVENTS_PER_USER} events each")
+    
     for i in range(USER_COUNT):
         username = f"testuser{i+1}"
         password = "TestPass123!"
         user_id = signup_and_login(username, password)
 
         if user_id:
+            print(f"   User {i+1}/{USER_COUNT}: {username} (ID: {user_id})")
             simulate_user(user_id)
+        else:
+            print(f"   ⚠️  Failed to create user: {username}")
 
-    print("✅ Fake data generation complete.")
+    print("\n✅ Fake data generation complete!")
+    print("   Data is now stored in the database.")
