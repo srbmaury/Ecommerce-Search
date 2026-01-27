@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import API_BASE_URL from './config';
 
 async function logEvent(eventType, productId, query, userId) {
@@ -28,10 +28,16 @@ export default function ProductCard({
     const [added, setAdded] = useState(cartQuantity > 0);
     const [quantity, setQuantity] = useState(cartQuantity);
 
+    // Sync local state with prop changes (when cart is updated externally)
+    useEffect(() => {
+        setQuantity(cartQuantity);
+        setAdded(cartQuantity > 0);
+    }, [cartQuantity]);
+
     const addToCart = async (e) => {
         e.stopPropagation();
         
-        await fetch(`${API_BASE_URL}/cart`, {
+        const res = await fetch(`${API_BASE_URL}/cart`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -40,6 +46,21 @@ export default function ProductCard({
                 query: query || ''
             })
         });
+
+        const data = await res.json();
+        
+        if (!res.ok) {
+            // If user not found, show error and suggest re-login
+            if (res.status === 404) {
+                alert('Session expired. Please login again.');
+                // Clear localStorage to force re-login
+                localStorage.removeItem('user');
+                window.location.reload();
+                return;
+            }
+            alert(data.error || 'Failed to add to cart');
+            return;
+        }
 
         if (!added) {
             setAdded(true);

@@ -22,19 +22,20 @@ def add_to_cart_controller(data):
 
     try:
         user = get_user_by_id(user_id)
-        if user:
-            group = user.group or "A"
-            cart = user.cart or {}
-            # Convert old list format to dict format if needed
-            if isinstance(cart, list):
-                cart = {str(pid): 1 for pid in cart}
-            # Add or increment quantity
-            product_id_str = str(product_id)
-            cart[product_id_str] = cart.get(product_id_str, 0) + 1
-            update_user_cart(user_id, cart)
-    except Exception:
-        # If cart update fails, continue to log event (cart operation is non-critical)
-        pass
+        if not user:
+            return {"error": "user not found. Please login again."}, 404
+        
+        group = user.get('group') or "A"
+        cart = user.get('cart') or {}
+        # Convert old list format to dict format if needed
+        if isinstance(cart, list):
+            cart = {str(pid): 1 for pid in cart}
+        # Add or increment quantity
+        product_id_str = str(product_id)
+        cart[product_id_str] = cart.get(product_id_str, 0) + 1
+        update_user_cart(user_id, cart)
+    except Exception as e:
+        return {"error": f"Failed to update cart: {str(e)}"}, 500
 
     # Log the event to database
     try:
@@ -64,7 +65,7 @@ def get_cart_controller(raw_user_id):
     try:
         user = get_user_by_id(user_id)
         if user:
-            cart_data = user.cart or {}
+            cart_data = user.get('cart') or {}
             # Convert old list format to dict format if needed
             if isinstance(cart_data, list):
                 cart_data = {str(pid): 1 for pid in cart_data}
@@ -117,7 +118,7 @@ def remove_from_cart_controller(data):
     try:
         user = get_user_by_id(user_id)
         if user:
-            cart = user.cart or {}
+            cart = user.get('cart') or {}
             # Convert old list format to dict format if needed
             if isinstance(cart, list):
                 cart = {str(pid): 1 for pid in cart}

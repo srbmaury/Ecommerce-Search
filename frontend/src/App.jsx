@@ -60,11 +60,7 @@ export default function App() {
 		e.preventDefault();
 		setSearchLoading(true);
 		setCurrentPage(1);
-		// Reset filters before applying intent
-		setCategoryFilter('');
-		setMinPrice('');
-		setMaxPrice('');
-		setSortBy('');
+		
 		try {
 			const res = await fetch(
 				`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&user_id=${user.user_id}`
@@ -81,13 +77,18 @@ export default function App() {
 			if (data.intent) {
 				const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
 
-				// Only auto-apply category if products exist with that category
-				if (suggested_category && products.some(p => p.category === suggested_category)) {
-					setCategoryFilter(suggested_category);
-				}
-				if (suggested_sort) setSortBy(suggested_sort);
-				if (suggested_min_price) setMinPrice(String(suggested_min_price));
-				if (suggested_max_price) setMaxPrice(String(suggested_max_price));
+				// Apply all filters together to avoid race conditions
+				const newCategory = (suggested_category && products.some(p => p.category === suggested_category)) 
+					? suggested_category 
+					: '';
+				const newSort = suggested_sort || '';
+				const newMinPrice = suggested_min_price ? String(suggested_min_price) : '';
+				const newMaxPrice = suggested_max_price ? String(suggested_max_price) : '';
+				
+				setCategoryFilter(newCategory);
+				setSortBy(newSort);
+				setMinPrice(newMinPrice);
+				setMaxPrice(newMaxPrice);
 
 				// Show toast only for actionable intents (sort or price filters, not just category)
 				const actionableIntents = (detected || []).filter(i => i !== 'category');
@@ -409,20 +410,84 @@ export default function App() {
 						</div>
 						<p className="modal-description">{selectedProduct.description}</p>
 						<div className="modal-actions">
-							<button
-								className="modal-add-btn"
-								onClick={async () => {
-									await fetch(`${API_BASE_URL}/cart`, {
-										method: 'POST',
-										headers: { 'Content-Type': 'application/json' },
-										body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
-									});
-									fetchCart();
-									showToast('Added to cart!', 'success');
-								}}
-							>
-								Add to Cart
-							</button>
+							{(() => {
+								const cartQty = getCartQuantity(selectedProduct.product_id);
+								if (cartQty === 0) {
+									return (
+										<button
+											className="modal-add-btn"
+											onClick={async () => {
+												await fetch(`${API_BASE_URL}/cart`, {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
+												});
+												fetchCart();
+												showToast('Added to cart!', 'success');
+											}}
+										>
+											Add to Cart
+										</button>
+									);
+								}
+								return (
+									<div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+										<button
+											onClick={async () => {
+												await fetch(`${API_BASE_URL}/cart/remove`, {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id })
+												});
+												fetchCart();
+											}}
+											style={{
+												width: '40px',
+												height: '40px',
+												borderRadius: '50%',
+												border: '2px solid #f44336',
+												background: 'white',
+												color: '#f44336',
+												fontSize: '20px',
+												cursor: 'pointer',
+												display: 'flex',
+												alignItems: 'center',
+												justifyContent: 'center'
+											}}
+										>
+											−
+										</button>
+										<span style={{ fontSize: '20px', fontWeight: 'bold', minWidth: '40px', textAlign: 'center' }}>
+											{cartQty}
+										</span>
+										<button
+											onClick={async () => {
+												await fetch(`${API_BASE_URL}/cart`, {
+													method: 'POST',
+													headers: { 'Content-Type': 'application/json' },
+													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
+												});
+												fetchCart();
+											}}
+											style={{
+												width: '40px',
+												height: '40px',
+												borderRadius: '50%',
+												border: '2px solid #4CAF50',
+												background: '#4CAF50',
+												color: 'white',
+												fontSize: '20px',
+												cursor: 'pointer',
+												display: 'flex',
+												alignItems: 'center',
+												justifyContent: 'center'
+											}}
+										>
+											+
+										</button>
+									</div>
+								);
+							})()}
 						</div>
 					</div>
 				</div>
