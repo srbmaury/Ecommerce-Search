@@ -2,6 +2,7 @@ import os
 import logging
 from flask import Flask
 from dotenv import load_dotenv
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import configure_cors
 from backend.scheduler import start_scheduler
