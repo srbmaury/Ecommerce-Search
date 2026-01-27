@@ -78,9 +78,6 @@ Thumbs.db
 # ml/*.pkl
 # ml/*.joblib
 
-# Ignore generated products
-products_*.csv
-
 # Ignore analytics output
 ml/analytics_output/
 
