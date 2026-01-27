@@ -3,6 +3,9 @@ import random
 import time
 from collections import defaultdict
 import os
+import sys
+import csv
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -54,7 +57,48 @@ try:
     db_products = session.query(Product).all()
     
     if not db_products:
-        print("❌ No products found in database!")
+        print("⚠️  No products found in database!")
+        print("🔄 Attempting to load products from CSV backup...")
+        
+        # Try to load from CSV backup
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "products_backup.csv")
+        
+        if os.path.exists(csv_path):
+            print(f"📂 Found CSV backup at {csv_path}")
+            print("💾 Importing products into database...")
+            
+            with open(csv_path, 'r', encoding='utf-8') as f:
+                reader = csv.DictReader(f)
+                imported = 0
+                
+                for row in reader:
+                    product = Product(
+                        id=int(row['product_id']),
+                        title=row['title'],
+                        description=row['description'],
+                        category=row['category'],
+                        price=float(row['price']),
+                        rating=float(row['rating']),
+                        review_count=int(row['review_count']),
+                        popularity=int(row['popularity']),
+                        created_at=datetime.fromisoformat(row['created_at']) if row.get('created_at') else datetime.utcnow()
+                    )
+                    session.add(product)
+                    imported += 1
+                
+                session.commit()
+                print(f"✅ Imported {imported} products from CSV")
+                
+                # Reload products
+                db_products = session.query(Product).all()
+        else:
+            print(f"❌ No CSV backup found at {csv_path}")
+            print("📝 To create a backup, run:")
+            print(f"   python -m ml.export_products_to_csv")
+            sys.exit(1)
+    
+    if not db_products:
+        print("❌ Still no products found!")
         sys.exit(1)
     
     for product in db_products:
