@@ -7,6 +7,7 @@ import sys
 import csv
 from datetime import datetime
 from dotenv import load_dotenv
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -18,8 +19,24 @@ from backend.services.security import hash_password
 
 # Environment-aware API URL
 API_URL = os.environ.get("API_URL", "http://localhost:5000")
-USER_COUNT = 30
-EVENTS_PER_USER = 40
+
+# Configurable scale - adjust based on your needs
+USER_COUNT = int(os.environ.get("USER_COUNT", 100))  # Default: 100 users
+EVENTS_PER_USER = int(os.environ.get("EVENTS_PER_USER", 100))  # Default: 100 events/user
+BATCH_SIZE = 500  # Commit database transactions in batches for better performance
+
+# Total events estimate
+TOTAL_EVENTS = USER_COUNT * EVENTS_PER_USER
+print(f"📊 Configuration: {USER_COUNT} users × {EVENTS_PER_USER} events = {TOTAL_EVENTS:,} total events")
+
+# Performance warning for large datasets
+if TOTAL_EVENTS > 100000:
+    print(f"⚠️  WARNING: {TOTAL_EVENTS:,} events is a large dataset.")
+    print(f"   - SQLite write time: ~{TOTAL_EVENTS // 500:.0f}-{TOTAL_EVENTS // 250:.0f} minutes")
+    print(f"   - Database size: ~{TOTAL_EVENTS * 0.5 // 1000:.0f}MB")
+    print(f"   - Consider starting with fewer events for testing")
+    import time
+    time.sleep(3)  # Give user time to read warning
 
 # Detect if running on PythonAnywhere (force database mode there)
 def detect_pythonanywhere():
@@ -207,19 +224,8 @@ def signup_and_login(username, password):
             if existing_user:
                 return existing_user.user_id
             
-            # Create new user
-            max_id_generation_attempts = 10
-            user_id = None
-            for _ in range(max_id_generation_attempts):
-                candidate_id = f"u{random.randint(100000, 999999)}"
-                # Ensure the generated user_id is not already in use
-                if not session.query(User).filter_by(user_id=candidate_id).first():
-                    user_id = candidate_id
-                    break
-            
-            if user_id is None:
-                raise RuntimeError("Failed to generate a unique user_id after multiple attempts")
-            
+            # Create new user with UUID-based ID
+            user_id = f"u{uuid.uuid4().hex[:12]}"
             group = random.choice(["A", "B"])
             
             new_user = User(
@@ -238,6 +244,26 @@ def signup_and_login(username, password):
             return None
         finally:
             session.close()
+
+# ----------------------------
+# Optimized batch operations for large-scale data
+# ----------------------------
+def log_events_batch(events_list):
+    """Log multiple events in a single transaction for better performance."""
+    if not events_list:
+        return
+    
+    session = get_db_session()
+    try:
+        for event_data in events_list:
+            event = SearchEvent(**event_data)
+            session.add(event)
+        session.commit()
+    except Exception as e:
+        print(f"Error logging batch of {len(events_list)} events: {e}")
+        session.rollback()
+    finally:
+        session.close()
 
 def log_event_to_db(user_id, query, product_id, event_type):
     """Log an event directly to the database."""
@@ -282,6 +308,19 @@ def add_to_cart_db(user_id, product_id):
 # User behavior simulation
 # ----------------------------
 def simulate_user(user_id):
+    """Simulate user behavior with batch operations for better performance."""
+    
+    # Get user's group for event logging
+    session = get_db_session()
+    try:
+        user = session.query(User).filter_by(user_id=user_id).first()
+        group = user.group if user else "A"
+    finally:
+        session.close()
+    
+    events_batch = []
+    cart_updates = []
+    
     for _ in range(EVENTS_PER_USER):
         product = random.choice(products)
         product_id = product["product_id"]
@@ -326,11 +365,17 @@ def simulate_user(user_id):
                             "query": query
                         }
                     )
-
+            time.sleep(random.uniform(0.03, 0.08))
         else:
-            # Direct database access
-            # Log click event
-            log_event_to_db(user_id, query, product_id, "click")
+            # Direct database access with batching
+            # Add click event to batch
+            events_batch.append({
+                "user_id": user_id,
+                "query": query,
+                "product_id": int(product_id),
+                "event_type": "click",
+                "group": group
+            })
             
             # Add to cart (30%)
             if random.random() < 0.3:
@@ -340,8 +385,41 @@ def simulate_user(user_id):
                     quantity = random.randint(2, 3)
                 
                 for _ in range(quantity):
-                    log_event_to_db(user_id, query, product_id, "add_to_cart")
-                    add_to_cart_db(user_id, product_id)
+                    events_batch.append({
+                        "user_id": user_id,
+                        "query": query,
+                        "product_id": int(product_id),
+                        "event_type": "add_to_cart",
+                        "group": group
+                    })
+                    cart_updates.append(product_id)
+            
+            # Batch commit every BATCH_SIZE events for performance
+            if len(events_batch) >= BATCH_SIZE:
+                log_events_batch(events_batch)
+                events_batch = []
+    
+    # Commit remaining events
+    if not USE_API and events_batch:
+        log_events_batch(events_batch)
+    
+    # Update cart
+    if not USE_API and cart_updates:
+        session = get_db_session()
+        try:
+            user = session.query(User).filter_by(user_id=user_id).first()
+            if user:
+                cart = user.cart or {}
+                for pid in cart_updates:
+                    product_id_str = str(pid)
+                    cart[product_id_str] = cart.get(product_id_str, 0) + 1
+                user.cart = cart
+                session.commit()
+        except Exception as e:
+            print(f"Error updating cart for user {user_id}: {e}")
+            session.rollback()
+        finally:
+            session.close()
             
 
 # ----------------------------
