@@ -16,21 +16,32 @@ from backend.models import User, Product, SearchEvent
 from backend.services.security import hash_password
 
 
-API = "http://localhost:5000"
+# Environment-aware API URL
+API_URL = os.environ.get("API_URL", "http://localhost:5000")
 USER_COUNT = 30
 EVENTS_PER_USER = 40
+
+# Detect if running on PythonAnywhere (force database mode there)
+IS_PYTHONANYWHERE = 'pythonanywhere' in os.environ.get('PYTHONANYWHERE_SITE', '').lower() or \
+                    '/home/' in os.getcwd() and 'pythonanywhere' in os.getcwd().lower()
 
 # Check if API is available
 def is_api_available():
     """Check if the backend API is running."""
+    if IS_PYTHONANYWHERE:
+        # On PythonAnywhere, always use direct database to avoid API issues
+        return False
     try:
-        response = requests.get(f"{API}/search?q=test&user_id=test", timeout=2)
+        response = requests.get(f"{API_URL}/search?q=test&user_id=test", timeout=2)
         return response.ok
     except requests.exceptions.RequestException:
         return False
 
 USE_API = is_api_available()
+print(f"🌐 Environment: {'PythonAnywhere (forced DB mode)' if IS_PYTHONANYWHERE else 'Local'}")
 print(f"🌐 API Mode: {'Enabled' if USE_API else 'Disabled (using direct database)'}")
+if USE_API:
+    print(f"🌐 API URL: {API_URL}")
 
 # ----------------------------
 # Initialize database
@@ -156,7 +167,7 @@ def signup_and_login(username, password):
     """Sign up or login a user. Works with both API and direct database."""
     if USE_API:
         # Try API signup
-        r = requests.post(f"{API}/signup", json={
+        r = requests.post(f"{API_URL}/signup", json={
             "username": username,
             "password": password
         })
@@ -165,7 +176,7 @@ def signup_and_login(username, password):
             return r.json()["user_id"]
 
         # Try API login
-        r = requests.post(f"{API}/login", json={
+        r = requests.post(f"{API_URL}/login", json={
             "username": username,
             "password": password
         })
@@ -225,7 +236,7 @@ def log_event_to_db(user_id, query, product_id, event_type):
         event = SearchEvent(
             user_id=user_id,
             query=query,
-            product_id=product_id,
+            product_id=int(product_id) if product_id else None,
             event_type=event_type,
             group=group
         )
@@ -271,13 +282,13 @@ def simulate_user(user_id):
         if USE_API:
             # Search
             requests.get(
-                f"{API}/search",
+                f"{API_URL}/search",
                 params={"q": query, "user_id": user_id}
             )
 
             # Click
             requests.post(
-                f"{API}/event",
+                f"{API_URL}/event",
                 json={
                     "user_id": user_id,
                     "query": query,
@@ -295,7 +306,7 @@ def simulate_user(user_id):
                 
                 for _ in range(quantity):
                     requests.post(
-                        f"{API}/cart",
+                        f"{API_URL}/cart",
                         json={
                             "user_id": user_id,
                             "product_id": product_id,
@@ -303,7 +314,6 @@ def simulate_user(user_id):
                         }
                     )
 
-            time.sleep(random.uniform(0.03, 0.08))
         else:
             # Direct database access
             # Log click event
@@ -320,8 +330,6 @@ def simulate_user(user_id):
                     log_event_to_db(user_id, query, product_id, "add_to_cart")
                     add_to_cart_db(user_id, product_id)
             
-            # Small delay to simulate realistic behavior
-            time.sleep(random.uniform(0.01, 0.02))
 
 # ----------------------------
 # Main
