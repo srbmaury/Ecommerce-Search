@@ -22,8 +22,21 @@ USER_COUNT = 30
 EVENTS_PER_USER = 40
 
 # Detect if running on PythonAnywhere (force database mode there)
-IS_PYTHONANYWHERE = 'pythonanywhere' in os.environ.get('PYTHONANYWHERE_SITE', '').lower() or \
-                    '/home/' in os.getcwd() and 'pythonanywhere' in os.getcwd().lower()
+def detect_pythonanywhere():
+    """Detect if running on PythonAnywhere environment."""
+    # Check for PythonAnywhere-specific environment variables
+    if any(key in os.environ for key in ['PYTHONANYWHERE_SITE', 'PYTHONANYWHERE_DOMAIN']):
+        return True
+    # Check if path matches PythonAnywhere user directory pattern (/home/username/)
+    cwd = os.getcwd()
+    if cwd.startswith('/home/') and '/.local/' not in cwd:
+        # Check if it's a typical PythonAnywhere setup (not just any /home/ directory)
+        parts = cwd.split('/')
+        if len(parts) >= 3 and parts[2]:  # /home/username/something
+            return True
+    return False
+
+IS_PYTHONANYWHERE = detect_pythonanywhere()
 
 # Check if API is available
 def is_api_available():
