@@ -25,8 +25,8 @@ def is_api_available():
     """Check if the backend API is running."""
     try:
         response = requests.get(f"{API}/search?q=test&user_id=test", timeout=2)
-        return True
-    except:
+        return response.ok
+    except requests.exceptions.RequestException:
         return False
 
 USE_API = is_api_available()
@@ -184,8 +184,18 @@ def signup_and_login(username, password):
                 return existing_user.user_id
             
             # Create new user
-            user_count = session.query(User).count()
-            user_id = f"u{random.randint(100000, 999999)}"
+            max_id_generation_attempts = 10
+            user_id = None
+            for _ in range(max_id_generation_attempts):
+                candidate_id = f"u{random.randint(100000, 999999)}"
+                # Ensure the generated user_id is not already in use
+                if not session.query(User).filter_by(user_id=candidate_id).first():
+                    user_id = candidate_id
+                    break
+            
+            if user_id is None:
+                raise RuntimeError("Failed to generate a unique user_id after multiple attempts")
+            
             group = random.choice(["A", "B"])
             
             new_user = User(
@@ -215,13 +225,14 @@ def log_event_to_db(user_id, query, product_id, event_type):
         event = SearchEvent(
             user_id=user_id,
             query=query,
-            product_id=str(product_id),
+            product_id=product_id,
             event_type=event_type,
             group=group
         )
         session.add(event)
         session.commit()
     except Exception as e:
+        print(f"Error logging event for user {user_id}, query '{query}', product_id '{product_id}', event_type '{event_type}': {e}")
         session.rollback()
     finally:
         session.close()
@@ -238,6 +249,7 @@ def add_to_cart_db(user_id, product_id):
             user.cart = cart
             session.commit()
     except Exception as e:
+        print(f"Error adding product {product_id} to cart for user {user_id}: {e}")
         session.rollback()
     finally:
         session.close()
