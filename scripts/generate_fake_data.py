@@ -24,7 +24,7 @@ API_URL = os.environ.get("API_URL", "http://localhost:5000")
 # Configurable scale - adjust based on your needs
 USER_COUNT = int(os.environ.get("USER_COUNT", 100))  # Default: 100 users
 EVENTS_PER_USER = int(os.environ.get("EVENTS_PER_USER", 100))  # Default: 100 events/user
-BATCH_SIZE = 500  # Commit database transactions in batches for better performance
+BATCH_SIZE = 2000  # Larger batch size for better performance
 
 # Total events estimate
 TOTAL_EVENTS = USER_COUNT * EVENTS_PER_USER
@@ -285,19 +285,27 @@ def log_event_to_db(user_id, query, product_id, event_type):
     finally:
         session.close()
 
-def add_to_cart_db(user_id, product_id, quantity=1):
-    """Add product to cart using CartItem model."""
+
+def add_to_cart_db_batch(cart_updates):
+    """Batch add products to cart for multiple users."""
+    if not cart_updates:
+        return
     session = get_db_session()
     try:
-        item = session.query(CartItem).filter_by(user_id=user_id, product_id=product_id).first()
-        if item:
-            item.quantity += quantity
-        else:
-            item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
-            session.add(item)
+        # Group updates by (user_id, product_id)
+        cart_dict = defaultdict(int)
+        for user_id, product_id, quantity in cart_updates:
+            cart_dict[(user_id, product_id)] += quantity
+        for (user_id, product_id), quantity in cart_dict.items():
+            item = session.query(CartItem).filter_by(user_id=user_id, product_id=product_id).first()
+            if item:
+                item.quantity += quantity
+            else:
+                item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
+                session.add(item)
         session.commit()
     except Exception as e:
-        print(f"Error adding product {product_id} to cart for user {user_id}: {e}")
+        print(f"Error in batch cart update: {e}")
         session.rollback()
     finally:
         session.close()
@@ -305,21 +313,21 @@ def add_to_cart_db(user_id, product_id, quantity=1):
 # ----------------------------
 # User behavior simulation
 # ----------------------------
-def simulate_user(user_id):
+
+def simulate_user(user_id, user_idx=None):
     """Simulate user behavior with batch operations for better performance."""
-    
-    # Get user's group for event logging
+    import time
     session = get_db_session()
     try:
         user = session.query(User).filter_by(user_id=user_id).first()
         group = user.group if user else "A"
     finally:
         session.close()
-    
+
     events_batch = []
     cart_updates = []
-    
-    for _ in range(EVENTS_PER_USER):
+    start = time.time()
+    for i in range(EVENTS_PER_USER):
         product = random.choice(products)
         product_id = product["product_id"]
 
@@ -329,77 +337,45 @@ def simulate_user(user_id):
         else:
             query = product["category"].lower()
 
-        if USE_API:
-            # Search
-            requests.get(
-                f"{API_URL}/search",
-                params={"q": query, "user_id": user_id}
-            )
+        # Only use direct DB mode for batching
+        events_batch.append({
+            "user_id": user_id,
+            "query": query,
+            "product_id": int(product_id),
+            "event_type": "click",
+            "group": group
+        })
 
-            # Click
-            requests.post(
-                f"{API_URL}/event",
-                json={
+        # Add to cart (30%)
+        if random.random() < 0.3:
+            quantity = 1
+            if random.random() < 0.2:
+                quantity = random.randint(2, 3)
+            for _ in range(quantity):
+                events_batch.append({
                     "user_id": user_id,
                     "query": query,
-                    "product_id": product_id,
-                    "event": "click"
-                }
-            )
+                    "product_id": int(product_id),
+                    "event_type": "add_to_cart",
+                    "group": group
+                })
+                cart_updates.append((user_id, product_id, 1))
 
-            # Add to cart (30%)
-            if not USE_API and random.random() < 0.3:
-                quantity = 1
-                if random.random() < 0.2:
-                    quantity = random.randint(2, 3)
-                for _ in range(quantity):
-                    events_batch.append({
-                        "user_id": user_id,
-                        "query": query,
-                        "product_id": int(product_id),
-                        "event_type": "add_to_cart",
-                        "group": group
-                    })
-                    cart_updates.append((user_id, product_id, 1))
-        else:
-            # Direct database access with batching
-            # Add click event to batch
-            events_batch.append({
-                "user_id": user_id,
-                "query": query,
-                "product_id": int(product_id),
-                "event_type": "click",
-                "group": group
-            })
-            
-            # Add to cart (30%)
-            if not USE_API and random.random() < 0.3:
-                quantity = 1
-                if random.random() < 0.2:
-                    quantity = random.randint(2, 3)
-                for _ in range(quantity):
-                    events_batch.append({
-                        "user_id": user_id,
-                        "query": query,
-                        "product_id": int(product_id),
-                        "event_type": "add_to_cart",
-                        "group": group
-                    })
-                    cart_updates.append((user_id, product_id, 1))
-            
-            # Batch commit every BATCH_SIZE events for performance
-            if len(events_batch) >= BATCH_SIZE:
-                log_events_batch(events_batch)
-                events_batch = []
-    
+        # Batch commit every BATCH_SIZE events for performance
+        if len(events_batch) >= BATCH_SIZE:
+            log_events_batch(events_batch)
+            events_batch = []
+            if user_idx is not None:
+                print(f"      [User {user_idx}] {i+1}/{EVENTS_PER_USER} events committed...")
+
     # Commit remaining events
-    if not USE_API and events_batch:
+    if events_batch:
         log_events_batch(events_batch)
-    
-    # Update cart
-    if not USE_API and cart_updates:
-        for user_id, product_id, quantity in cart_updates:
-            add_to_cart_db(user_id, product_id, quantity)
+    # Batch update cart
+    if cart_updates:
+        add_to_cart_db_batch(cart_updates)
+    if user_idx is not None:
+        print(f"      [User {user_idx}] All events and cart updates done in {time.time()-start:.1f}s")
 
             
 
@@ -407,9 +383,10 @@ def simulate_user(user_id):
 # Main
 # ----------------------------
 if __name__ == "__main__":
+    import time
     print("\n🚀 Starting fake data generation...")
     print(f"   Creating {USER_COUNT} users with {EVENTS_PER_USER} events each")
-    
+    total_start = time.time()
     for i in range(USER_COUNT):
         username = f"testuser{i+1}"
         password = "TestPass123!"
@@ -417,9 +394,9 @@ if __name__ == "__main__":
 
         if user_id:
             print(f"   User {i+1}/{USER_COUNT}: {username} (ID: {user_id})")
-            simulate_user(user_id)
+            simulate_user(user_id, user_idx=i+1)
         else:
             print(f"   ⚠️  Failed to create user: {username}")
 
-    print("\n✅ Fake data generation complete!")
+    print(f"\n✅ Fake data generation complete in {time.time()-total_start:.1f}s!")
     print("   Data is now stored in the database.")

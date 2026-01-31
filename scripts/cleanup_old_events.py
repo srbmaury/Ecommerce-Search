@@ -1,6 +1,6 @@
 import datetime
 import logging
-from backend.database import get_db_session
+from backend.utils.database import get_db_session
 from backend.models import SearchEvent
 
 logging.basicConfig(level=logging.INFO)
