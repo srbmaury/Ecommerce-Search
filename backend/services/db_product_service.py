@@ -3,7 +3,7 @@ Database service for product operations.
 """
 import pandas as pd
 from sqlalchemy import desc
-from backend.database import get_db_session
+from backend.utils.database import get_db_session
 from backend.models import Product
 
 

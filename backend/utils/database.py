@@ -5,7 +5,7 @@ import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from backend.models import Base
-from backend.config import get_database_url
+from backend.utils.config import get_database_url
 
 logger = logging.getLogger(__name__)
 

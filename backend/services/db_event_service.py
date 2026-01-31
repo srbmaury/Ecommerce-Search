@@ -4,7 +4,7 @@ Database service for search event operations.
 import pandas as pd
 from datetime import datetime, timezone, timedelta
 from sqlalchemy import desc, and_
-from backend.database import get_db_session
+from backend.utils.database import get_db_session
 from backend.models import SearchEvent
 
 

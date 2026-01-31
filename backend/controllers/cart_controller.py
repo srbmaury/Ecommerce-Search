@@ -1,9 +1,9 @@
 from datetime import datetime
 
 from backend.utils.sanitize import sanitize_user_id
-from backend.db_user_manager import get_user_by_id, update_user_cart
-from backend.db_event_service import create_search_event
-from backend.db_product_service import update_product_popularity, get_products_by_ids
+from backend.services.db_user_manager import get_user_by_id, add_to_cart, remove_from_cart, clear_cart, get_cart
+from backend.services.db_event_service import create_search_event
+from backend.services.db_product_service import update_product_popularity, get_products_by_ids
 from backend.services.retrain_trigger import record_event
 
 def add_to_cart_controller(data):
@@ -24,16 +24,8 @@ def add_to_cart_controller(data):
         user = get_user_by_id(user_id)
         if not user:
             return {"error": "user not found. Please login again."}, 404
-        
         group = user.get('group') or "A"
-        cart = user.get('cart') or {}
-        # Convert old list format to dict format if needed
-        if isinstance(cart, list):
-            cart = {str(pid): 1 for pid in cart}
-        # Add or increment quantity
-        product_id_str = str(product_id)
-        cart[product_id_str] = cart.get(product_id_str, 0) + 1
-        update_user_cart(user_id, cart)
+        add_to_cart(user_id, int(product_id), 1)
     except Exception as e:
         return {"error": f"Failed to update cart: {str(e)}"}, 500
 
@@ -60,29 +52,19 @@ def get_cart_controller(raw_user_id):
     if user_id is None:
         return {"error": "invalid user_id"}, 400
 
-    cart_data = {}
-
     try:
         user = get_user_by_id(user_id)
-        if user:
-            cart_data = user.get('cart') or {}
-            # Convert old list format to dict format if needed
-            if isinstance(cart_data, list):
-                cart_data = {str(pid): 1 for pid in cart_data}
+        if not user:
+            return {"error": "user not found. Please login again."}, 404
+        cart_data = get_cart(user_id)
     except Exception:
-        # If user lookup fails, return empty cart
-        pass
+        cart_data = {}
 
     cart_items = []
-
     if cart_data:
-        # Only fetch products that are in the cart (more efficient than loading all products)
         product_ids = list(cart_data.keys())
         products_list = get_products_by_ids(product_ids)
-        
-        # Create a lookup dict for quick access
         products_dict = {str(p['product_id']): p for p in products_list}
-        
         for pid, quantity in cart_data.items():
             try:
                 if pid in products_dict:
@@ -90,12 +72,9 @@ def get_cart_controller(raw_user_id):
                     item["quantity"] = quantity
                     cart_items.append(item)
             except Exception:
-                # Skip products that can't be loaded
                 continue
-
     total = sum(item.get("price", 0) * item.get("quantity", 1) for item in cart_items)
     total_items = sum(item.get("quantity", 1) for item in cart_items)
-
     return {
         "items": cart_items,
         "total": total,
@@ -117,22 +96,11 @@ def remove_from_cart_controller(data):
 
     try:
         user = get_user_by_id(user_id)
-        if user:
-            cart = user.get('cart') or {}
-            # Convert old list format to dict format if needed
-            if isinstance(cart, list):
-                cart = {str(pid): 1 for pid in cart}
-            # Remove product or decrement quantity
-            if product_id in cart:
-                if cart[product_id] > 1:
-                    cart[product_id] -= 1
-                else:
-                    del cart[product_id]
-                update_user_cart(user_id, cart)
+        if not user:
+            return {"error": "user not found. Please login again."}, 404
+        remove_from_cart(user_id, int(product_id), 1)
     except Exception:
-        # If cart update fails, silently ignore (non-critical operation)
         pass
-
     return {"status": "removed from cart"}, 200
 
 
@@ -148,10 +116,9 @@ def clear_cart_controller(data):
 
     try:
         user = get_user_by_id(user_id)
-        if user:
-            update_user_cart(user_id, {})
+        if not user:
+            return {"error": "user not found. Please login again."}, 404
+        clear_cart(user_id)
     except Exception:
-        # If cart clear fails, silently ignore (non-critical operation)
         pass
-
     return {"status": "cart cleared"}, 200

@@ -3,8 +3,8 @@ import json
 import collections
 import pandas as pd
 from flask import jsonify
-from backend.db_event_service import get_events_df
-from backend.db_user_manager import get_db_session
+from backend.services.db_event_service import get_events_df
+from backend.services.db_user_manager import get_db_session
 from backend.models import User
 from backend.services.analytics_html import build_html
 

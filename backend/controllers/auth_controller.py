@@ -8,7 +8,7 @@ from backend.services.security import (
     validate_password,
     hash_password
 )
-from backend.db_user_manager import (
+from backend.services.db_user_manager import (
     get_user_by_username, 
     create_user
 )
@@ -58,7 +58,7 @@ def login_controller(data):
         password_valid = bcrypt.checkpw(password.encode("utf-8"), user.password_hash.encode("utf-8"))
     else:
         # Dummy hash check to maintain constant time
-        bcrypt.checkpw(password.encode("utf-8"), bcrypt.hashpw(b"dummy", bcrypt.gensalt()).encode("utf-8"))
+        bcrypt.checkpw(password.encode("utf-8"), bcrypt.hashpw(b"dummy", bcrypt.gensalt()))
         password_valid = False
 
     if not user or not password_valid:

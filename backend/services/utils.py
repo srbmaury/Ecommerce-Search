@@ -4,7 +4,7 @@ Utility functions for services - use database instead.
 import pandas as pd
 import threading
 from datetime import datetime, timezone
-from backend.db_product_service import get_products_df as _get_products_df, update_product_popularity as _update_product_popularity
+from backend.services.db_product_service import get_products_df as _get_products_df, update_product_popularity as _update_product_popularity
 
 
 # Global cache for products with thread-safe access

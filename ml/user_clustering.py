@@ -1,8 +1,8 @@
 import pandas as pd
 import numpy as np
 from sklearn.cluster import KMeans
-from backend.db_event_service import get_events_df
-from backend.db_product_service import get_products_df
+from backend.services.db_event_service import get_events_df
+from backend.services.db_product_service import get_products_df
 
 def extract_user_features():
     """Extract user features from database."""

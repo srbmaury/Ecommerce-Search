@@ -1,5 +1,5 @@
 import pandas as pd
-from backend.db_event_service import get_events_df
+from backend.services.db_event_service import get_events_df
 
 def ab_analytics():
     """Analyze A/B test results from database."""

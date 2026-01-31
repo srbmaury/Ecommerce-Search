@@ -4,9 +4,8 @@ from flask import Flask
 from dotenv import load_dotenv
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.config import configure_cors
-from backend.scheduler import start_scheduler
-from backend.database import init_db, create_tables
+from backend.utils.config import configure_cors
+from backend.utils.database import init_db, create_tables
 
 from backend.routes.auth_routes import bp as auth_bp
 from backend.routes.search_routes import bp as search_bp
@@ -54,11 +53,6 @@ def create_app():
     app.register_blueprint(analytics_bp)
     app.register_blueprint(rec_bp)
 
-    # Only start the scheduler if RUN_SCHEDULER is not set to '0' or 'false'
-    run_scheduler = os.getenv("RUN_SCHEDULER", "1").lower() in ("1", "true", "yes")
-    if run_scheduler:
-        start_scheduler()
-    
     return app
 
 

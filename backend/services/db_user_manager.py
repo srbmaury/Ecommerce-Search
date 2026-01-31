@@ -1,8 +1,8 @@
 """
 Database-based user management with PostgreSQL/Neon.
 """
-from backend.database import get_db_session
-from backend.models import User
+from backend.utils.database import get_db_session
+from backend.models import User, CartItem, Product
 
 
 def load_users():
@@ -18,7 +18,8 @@ def load_users():
                 "username": user.username,
                 "password_hash": user.password_hash,
                 "group": user.group,
-                "cart": user.cart or {},
+                # Cart is now normalized; fetch as dict for compatibility
+                "cart": {str(item.product_id): item.quantity for item in user.cart_items},
                 "cluster": user.cluster
             })
         return users_list
@@ -41,29 +42,29 @@ def save_users(users_list):
         for user_data in users_list:
             user_id = user_data["user_id"]
             user = existing_users_dict.get(user_id)
-            
             if user:
-                # Update existing user
                 user.username = user_data.get("username", user.username)
                 user.password_hash = user_data.get("password_hash", user.password_hash)
                 user.group = user_data.get("group", user.group)
-                user.cart = user_data.get("cart", {})
                 user.cluster = user_data.get("cluster")
+                # Update cart items
+                cart_dict = user_data.get("cart", {})
+                session.query(CartItem).filter_by(user_id=user_id).delete()
+                for pid, qty in cart_dict.items():
+                    session.add(CartItem(user_id=user_id, product_id=int(pid), quantity=qty))
             else:
-                # Create new user
-                cart = user_data.get("cart", {})
-                if isinstance(cart, list):
-                    cart = {str(pid): 1 for pid in cart}
-                
                 user = User(
                     user_id=user_data["user_id"],
                     username=user_data["username"],
                     password_hash=user_data.get("password_hash", ""),
                     group=user_data.get("group", "A"),
-                    cluster=user_data.get("cluster"),
-                    cart=cart
+                    cluster=user_data.get("cluster")
                 )
                 session.add(user)
+                session.flush()
+                cart_dict = user_data.get("cart", {})
+                for pid, qty in cart_dict.items():
+                    session.add(CartItem(user_id=user.user_id, product_id=int(pid), quantity=qty))
         session.commit()
     except Exception as e:
         session.rollback()
@@ -77,13 +78,15 @@ def get_user_by_id(user_id):
     try:
         user = session.query(User).filter_by(user_id=user_id).first()
         if user:
+            # Return cart as dict for compatibility
+            cart_dict = {str(item.product_id): item.quantity for item in user.cart_items}
             return {
                 'user_id': user.user_id,
                 'username': user.username,
                 'password_hash': user.password_hash,
                 'group': user.group,
                 'cluster': user.cluster,
-                'cart': user.cart,
+                'cart': cart_dict,
                 'created_at': user.created_at,
                 'updated_at': user.updated_at
             }
@@ -117,13 +120,12 @@ def create_user(user_id, username, password_hash, group="A"):
             user_id=user_id,
             username=username,
             password_hash=password_hash,
-            group=group,
-            cart={}
+            group=group
         )
         session.add(user)
         session.commit()
         session.refresh(user)
-        session.expunge(user)  # Detach from session to prevent DetachedInstanceError
+        session.expunge(user)
         return user
     except Exception as e:
         session.rollback()
@@ -132,19 +134,60 @@ def create_user(user_id, username, password_hash, group="A"):
         session.close()
 
 
-def update_user_cart(user_id, cart):
-    """Update user's cart."""
+
+# CartItem-based cart operations
+def add_to_cart(user_id, product_id, quantity=1):
     session = get_db_session()
     try:
-        user = session.query(User).filter_by(user_id=user_id).first()
-        if user:
-            user.cart = cart
+        item = session.query(CartItem).filter_by(user_id=user_id, product_id=product_id).first()
+        if item:
+            item.quantity += quantity
+        else:
+            item = CartItem(user_id=user_id, product_id=product_id, quantity=quantity)
+            session.add(item)
+        session.commit()
+        return True
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+def remove_from_cart(user_id, product_id, quantity=1):
+    session = get_db_session()
+    try:
+        item = session.query(CartItem).filter_by(user_id=user_id, product_id=product_id).first()
+        if item:
+            if item.quantity > quantity:
+                item.quantity -= quantity
+            else:
+                session.delete(item)
             session.commit()
             return True
         return False
     except Exception as e:
         session.rollback()
         raise e
+    finally:
+        session.close()
+
+def clear_cart(user_id):
+    session = get_db_session()
+    try:
+        session.query(CartItem).filter_by(user_id=user_id).delete()
+        session.commit()
+        return True
+    except Exception as e:
+        session.rollback()
+        raise e
+    finally:
+        session.close()
+
+def get_cart(user_id):
+    session = get_db_session()
+    try:
+        items = session.query(CartItem).filter_by(user_id=user_id).all()
+        return {str(item.product_id): item.quantity for item in items}
     finally:
         session.close()
 
