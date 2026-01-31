@@ -1,5 +1,5 @@
 from ml.user_clustering import cluster_users
-from backend.db_user_manager import get_db_session
+from backend.services.db_user_manager import get_db_session
 from backend.models import User
 
 def assign_clusters_to_users(n_clusters=3):

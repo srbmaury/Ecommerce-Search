@@ -1,9 +1,9 @@
 from datetime import datetime
 
 from backend.utils.sanitize import sanitize_user_id
-from backend.db_user_manager import get_user_by_id
-from backend.db_event_service import create_search_event
-from backend.db_product_service import update_product_popularity
+from backend.services.db_user_manager import get_user_by_id
+from backend.services.db_event_service import create_search_event
+from backend.services.db_product_service import update_product_popularity
 from backend.services.retrain_trigger import record_event
 
 

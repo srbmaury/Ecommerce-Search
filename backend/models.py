@@ -4,29 +4,40 @@ SQLAlchemy models for the e-commerce search application.
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, backref
 
 Base = declarative_base()
+
 
 
 class User(Base):
     """User model with authentication and cart information."""
     __tablename__ = 'users'
-    
     user_id = Column(String(50), primary_key=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
     password_hash = Column(String(255), nullable=False)
     group = Column(String(10), default='A')  # A/B testing group
     cluster = Column(Integer, nullable=True, index=True)  # User cluster for recommendations
-    cart = Column(JSON, default=lambda: {})  # Cart as JSON: {product_id: quantity}
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    
     # Relationship to search events
     search_events = relationship('SearchEvent', back_populates='user', cascade='all, delete-orphan')
-    
     def __repr__(self):
         return f"<User(user_id='{self.user_id}', username='{self.username}')>"
+
+# CartItem model for normalized cart storage
+class CartItem(Base):
+    __tablename__ = 'cart_items'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(String(50), ForeignKey('users.user_id', ondelete='CASCADE'), nullable=False)
+    product_id = Column(Integer, ForeignKey('products.id', ondelete='CASCADE'), nullable=False)
+    quantity = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    user = relationship('User', backref=backref('cart_items', cascade='all, delete-orphan'))
+    product = relationship('Product')
+    def __repr__(self):
+        return f"<CartItem(id={self.id}, user_id='{self.user_id}', product_id={self.product_id}, quantity={self.quantity})>"
 
 
 class Product(Base):

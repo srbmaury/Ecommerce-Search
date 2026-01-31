@@ -1,6 +1,6 @@
 import pandas as pd
-from backend.db_event_service import get_events_df
-from backend.db_product_service import get_products_df
+from backend.services.db_event_service import get_events_df
+from backend.services.db_product_service import get_products_df
 
 def build_user_profiles():
     """Build user profiles from database data."""

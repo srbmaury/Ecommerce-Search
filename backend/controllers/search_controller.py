@@ -1,7 +1,7 @@
-from backend.search import search_products, search_by_category
-from backend.db_user_manager import get_user_by_id
+from backend.utils.search import search_products, search_by_category
+from backend.services.db_user_manager import get_user_by_id
 from backend.utils.sanitize import sanitize_user_id
-from backend.intent import detect_intent
+from backend.utils.intent import detect_intent
 
 
 def search_controller(query, raw_user_id):

@@ -1,4 +1,3 @@
-
 # Ecommerce Search Engine
 
 ## Live Demo
@@ -105,7 +104,7 @@ Create a Python script to load your products into the database:
 
 ```python
 from backend.database import init_db
-from backend.db_product_service import create_product
+from backend.services.db_product_service import create_product
 
 # Initialize the database
 init_db()
@@ -214,7 +213,7 @@ Once the frontend is running:
 - **Cart Display:** View cart with item count and total price.
 - **Remove Items:** Remove individual items from cart.
 - **Clear Cart:** Clear all items at once.
-- **Persistent Cart:** Cart data persists across sessions (stored in database).
+- **Persistent Cart:** Cart data persists across sessions (stored in the `cart_items` table, normalized by user and product).
 
 ### Dynamic Popularity
 - **Click Tracking:** Product popularity increases by +1 on each click.
@@ -231,6 +230,7 @@ Once the frontend is running:
 - Run `python ml/analytics.py` for a CLI summary of A/B group performance.
 
 ---
+
 
 ## Updating Clusters & Model
 - **Model:** Auto-retrains after 500 events or 24 hours (whichever comes first)
@@ -312,10 +312,10 @@ Once the frontend is running:
 ### Database Indexes
 - User: `user_id`, `username`, `cluster`
 - Product: `id` (auto-increment), `category`, `popularity`, composite index on `(category, price)`
+- CartItem: `id` (auto-increment), `user_id`, `product_id` (for fast cart queries)
 - SearchEvent: `user_id`, `event_type`, `timestamp`, `group`, composite indexes for analytics
 
 ### Scalability Considerations
-- JSON column for cart (efficient for small-medium datasets)
 - Event table will grow large over time - consider archiving old events (>6 months)
 - For very large catalogs (>100k products), consider adding full-text search (PostgreSQL's `tsvector`)
 

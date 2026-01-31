@@ -5,9 +5,9 @@ from ml.user_profile import build_user_profiles
 from ml.features import build_features
 from ml.model import predict_score
 from ml.vectorizer import build_vectorizer
-from backend.db_user_manager import load_users
-from backend.db_product_service import get_products_df
-from backend.db_event_service import get_events_df
+from backend.services.db_user_manager import load_users
+from backend.services.db_product_service import get_products_df
+from backend.services.db_event_service import get_events_df
 import difflib
 import threading
 import json
