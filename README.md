@@ -107,10 +107,6 @@ Set the following variables in `.env`:
    ```bash
    python -m ml.assign_user_clusters
    ```
-- Analytics:
-   ```bash
-   python ml/analytics.py
-   ```
 
 ### 6. Run the Backend Server
 ```bash
@@ -189,8 +185,8 @@ npm run dev
 - **User Profiles:** Refresh every 5 minutes
 - **Manual retrain:**
    ```bash
-   python ml/train_ranker.py
-   python ml/assign_user_clusters.py
+   python -m ml.train_ranker
+   python -m ml.assign_user_clusters
    ```
 
 ---
@@ -222,7 +218,7 @@ npm run dev
 2. Wait for backend auto-retrain or run model/cluster scripts manually
 3. Run analytics:
     ```bash
-    python ml/analytics.py
+    python -m ml.analytics
     ```
     to compare A/B group performance
 4. Analyze results and iterate on ranking, clustering, or UI
