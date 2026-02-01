@@ -2,8 +2,12 @@ import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
 import './App.css';
 import API_BASE_URL from './config';
+import { fetchRecommendations } from './api';
+import AnalyticsDashboard from './AnalyticsDashboard';
+
 
 export default function App() {
+	const [showAnalytics, setShowAnalytics] = useState(false);
 	const [user, setUser] = useState(() => {
 		const saved = localStorage.getItem('user');
 		return saved ? JSON.parse(saved) : null;
@@ -60,7 +64,7 @@ export default function App() {
 		e.preventDefault();
 		setSearchLoading(true);
 		setCurrentPage(1);
-		
+
 		try {
 			const res = await fetch(
 				`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&user_id=${user.user_id}`
@@ -78,13 +82,13 @@ export default function App() {
 				const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
 
 				// Apply all filters together to avoid race conditions
-				const newCategory = (suggested_category && products.some(p => p.category === suggested_category)) 
-					? suggested_category 
+				const newCategory = (suggested_category && products.some(p => p.category === suggested_category))
+					? suggested_category
 					: '';
 				const newSort = suggested_sort || '';
 				const newMinPrice = suggested_min_price ? String(suggested_min_price) : '';
 				const newMaxPrice = suggested_max_price ? String(suggested_max_price) : '';
-				
+
 				setCategoryFilter(newCategory);
 				setSortBy(newSort);
 				setMinPrice(newMinPrice);
@@ -164,14 +168,22 @@ export default function App() {
 		return item ? item.quantity : 0;
 	};
 
+	// Unified cart update for ProductCard and everywhere
+	const handleCartUpdate = () => {
+		fetchCart();
+	};
+
 	useEffect(() => {
 		if (!user) return;
 		setRecsLoading(true);
-		fetch(`${API_BASE_URL}/recommendations?user_id=${user.user_id}`)
-			.then((r) => r.json())
+		fetchRecommendations(user.user_id)
 			.then((d) => {
 				setRecent(d.recent || []);
 				setRecommended(d.similar || []);
+			})
+			.catch((err) => {
+				setRecent([]);
+				setRecommended([]);
 			})
 			.finally(() => setRecsLoading(false));
 		fetchCart();
@@ -276,14 +288,15 @@ export default function App() {
 	}
 
 	/* ---------- DASHBOARD ---------- */
+
 	return (
 		<div className="app">
 			<header className="topbar">
 				<button
 					className="analytics-btn"
-					onClick={() => window.open(`${API_BASE_URL}/analytics`, '_blank')}
+					onClick={() => setShowAnalytics(true)}
 				>
-					Analytics
+					📊 Analytics Dashboard
 				</button>
 				<div className="topbar-right">
 					<button
@@ -308,6 +321,16 @@ export default function App() {
 				</p>
 			</div>
 
+			{/* Analytics Dashboard Modal */}
+			{showAnalytics && (
+				<div className="modal-overlay" onClick={() => setShowAnalytics(false)}>
+					<div className="analytics-modal" onClick={e => e.stopPropagation()} style={{ background: '#f9f9f9', borderRadius: 16, padding: 24, maxWidth: 1300, margin: '40px auto', boxShadow: '0 4px 24px #0001', position: 'relative' }}>
+						<button className="modal-close" style={{ position: 'absolute', top: 16, right: 16, fontSize: 24, background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAnalytics(false)}>✕</button>
+						<AnalyticsDashboard />
+					</div>
+				</div>
+			)}
+
 			{/* Cart Modal */}
 			{showCart && (
 				<div className="cart-modal">
@@ -324,67 +347,67 @@ export default function App() {
 							<div className="cart-items">
 								{cart.map((item, idx) => (
 									<div key={idx} className="cart-item">
-									<div className="cart-item-info" onClick={() => { setSelectedProduct(item); }} style={{ flex: 1 }}>
-										<div className="cart-item-title">{item.title}</div>
-										<div className="cart-item-price">${item.price?.toFixed(2)} each</div>
-										{item.quantity > 1 && <div style={{ fontSize: '0.9em', color: '#666', marginTop: '4px' }}>Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>}
+										<div className="cart-item-info" onClick={() => { setSelectedProduct(item); }} style={{ flex: 1 }}>
+											<div className="cart-item-title">{item.title}</div>
+											<div className="cart-item-price">${item.price?.toFixed(2)} each</div>
+											{item.quantity > 1 && <div style={{ fontSize: '0.9em', color: '#666', marginTop: '4px' }}>Subtotal: ${(item.price * item.quantity).toFixed(2)}</div>}
+										</div>
+										<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+											<button
+												onClick={() => removeFromCart(item.product_id)}
+												style={{
+													width: '28px',
+													height: '28px',
+													borderRadius: '50%',
+													border: '2px solid #f44336',
+													background: 'white',
+													color: '#f44336',
+													fontSize: '16px',
+													cursor: 'pointer',
+													display: 'flex',
+													alignItems: 'center',
+													justifyContent: 'center'
+												}}
+											>
+												−
+											</button>
+											<span style={{ fontSize: '16px', fontWeight: 'bold', minWidth: '25px', textAlign: 'center' }}>
+												{item.quantity}
+											</span>
+											<button
+												onClick={async () => {
+													await fetch(`${API_BASE_URL}/cart`, {
+														method: 'POST',
+														headers: { 'Content-Type': 'application/json' },
+														body: JSON.stringify({ user_id: user.user_id, product_id: item.product_id, query: '' })
+													});
+													fetchCart();
+												}}
+												style={{
+													width: '28px',
+													height: '28px',
+													borderRadius: '50%',
+													border: '2px solid #4CAF50',
+													background: '#4CAF50',
+													color: 'white',
+													fontSize: '16px',
+													cursor: 'pointer',
+													display: 'flex',
+													alignItems: 'center',
+													justifyContent: 'center'
+												}}
+											>
+												+
+											</button>
+										</div>
 									</div>
-									<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-										<button
-											onClick={() => removeFromCart(item.product_id)}
-											style={{
-												width: '28px',
-												height: '28px',
-												borderRadius: '50%',
-												border: '2px solid #f44336',
-												background: 'white',
-												color: '#f44336',
-												fontSize: '16px',
-												cursor: 'pointer',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center'
-											}}
-										>
-											−
-										</button>
-										<span style={{ fontSize: '16px', fontWeight: 'bold', minWidth: '25px', textAlign: 'center' }}>
-											{item.quantity}
-										</span>
-										<button
-											onClick={async () => {
-												await fetch(`${API_BASE_URL}/cart`, {
-													method: 'POST',
-													headers: { 'Content-Type': 'application/json' },
-												body: JSON.stringify({ user_id: user.user_id, product_id: item.product_id, query: '' })
-												});
-												fetchCart();
-											}}
-											style={{
-												width: '28px',
-												height: '28px',
-												borderRadius: '50%',
-												border: '2px solid #4CAF50',
-												background: '#4CAF50',
-												color: 'white',
-												fontSize: '16px',
-												cursor: 'pointer',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center'
-											}}
-										>
-											+
-										</button>
-									</div>
-								</div>
-							))}
-						</div>
-						<div className="cart-footer">
-							<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
-							<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
-						</div>
-					</>
+								))}
+							</div>
+							<div className="cart-footer">
+								<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
+								<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
+							</div>
+						</>
 					)}
 				</div>
 			)}
@@ -562,7 +585,7 @@ export default function App() {
 												product={p}
 												userId={user.user_id}
 												query={query}
-												onCartUpdate={fetchCart}
+												onCartUpdate={handleCartUpdate}
 												onProductClick={setSelectedProduct}
 												cartQuantity={getCartQuantity(p.product_id)}
 											/>
@@ -603,11 +626,11 @@ export default function App() {
 											key={p.product_id}
 											product={p}
 											userId={user.user_id}
-										query=""
-										onCartUpdate={fetchCart}
-										onProductClick={setSelectedProduct}
-										cartQuantity={getCartQuantity(p.product_id)}
-									/>
+											query=""
+											onCartUpdate={handleCartUpdate}
+											onProductClick={setSelectedProduct}
+											cartQuantity={getCartQuantity(p.product_id)}
+										/>
 									))
 								)}
 							</div>
@@ -629,12 +652,12 @@ export default function App() {
 											key={p.product_id}
 											product={p}
 											userId={user.user_id}
-										query=""
-										isRecommendation
-										onCartUpdate={fetchCart}
-										onProductClick={setSelectedProduct}
-										cartQuantity={getCartQuantity(p.product_id)}
-									/>
+											query=""
+											isRecommendation
+											onCartUpdate={handleCartUpdate}
+											onProductClick={setSelectedProduct}
+											cartQuantity={getCartQuantity(p.product_id)}
+										/>
 									))
 								)}
 							</div>

@@ -2,10 +2,10 @@
 Database service for product operations.
 """
 import pandas as pd
-from sqlalchemy import desc
+from sqlalchemy import desc, func
+from sqlalchemy.dialects.postgresql import to_tsquery
 from backend.utils.database import get_db_session
 from backend.models import Product
-
 
 def get_all_products():
     """Get all products as a list of dictionaries."""
@@ -26,16 +26,54 @@ def get_all_products():
     finally:
         session.close()
 
+def get_products_by_ids(product_ids):
+    """Fetch products by a list of product_ids."""
+    session = get_db_session()
+    try:
+        products = session.query(Product).filter(Product.id.in_(product_ids)).all()
+        return [{
+            'product_id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'category': p.category,
+            'price': p.price,
+            'rating': p.rating,
+            'review_count': p.review_count,
+            'popularity': p.popularity,
+            'created_at': p.created_at
+        } for p in products]
+    finally:
+        session.close()
 
-def get_products_df():
-    """Get all products as a pandas DataFrame (for ML compatibility)."""
-    products = get_all_products()
-    if not products:
-        return pd.DataFrame()
-    df = pd.DataFrame(products)
-    if 'created_at' in df.columns:
-        df['created_at'] = pd.to_datetime(df['created_at'])
-    return df
+def get_products_df(search_query=None):
+    """Get all products as a pandas DataFrame, optionally filtered by full-text search (PostgreSQL only)."""
+    session = get_db_session()
+    try:
+        if search_query and session.bind.dialect.name == 'postgresql':
+            q = session.query(Product).filter(
+                func.to_tsvector('english', Product.title + ' ' + func.coalesce(Product.description, ''))
+                .match(search_query, postgresql_regconfig='english')
+            )
+            products = q.all()
+        else:
+            products = session.query(Product).all()
+        result = [{
+            'product_id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'category': p.category,
+            'price': p.price,
+            'rating': p.rating,
+            'review_count': p.review_count,
+            'popularity': p.popularity,
+            'created_at': p.created_at
+        } for p in products]
+        df = pd.DataFrame(result)
+        if 'created_at' in df.columns:
+            df['created_at'] = pd.to_datetime(df['created_at'])
+        return df
+    finally:
+        session.close()
 
 
 def get_product_by_id(product_id):

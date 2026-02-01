@@ -1,3 +1,8 @@
+import redis
+import pickle
+
+# Initialize Redis client (default: localhost:6379)
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 import pandas as pd
 from datetime import datetime, timezone
@@ -118,16 +123,24 @@ def get_user_profile(user_id):
     """
     global _user_profiles, _user_profiles_last_refresh
 
-    # Quick check without lock (fast path)
+    # Cache-aside: Try Redis cache first
+    cache_key = f"user_profile:{user_id}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return pickle.loads(cached)
+
+    # Fallback to in-memory and DB
     now = datetime.now(timezone.utc)
     if (_user_profiles is not None and
         _user_profiles_last_refresh is not None and
         (now - _user_profiles_last_refresh).total_seconds() <= PROFILE_REFRESH_SECONDS):
-        return _user_profiles.get(user_id) if _user_profiles else None
+        profile = _user_profiles.get(user_id) if _user_profiles else None
+        if profile:
+            redis_client.setex(cache_key, PROFILE_REFRESH_SECONDS, pickle.dumps(profile))
+        return profile
 
     # Reload with lock (slow path)
     with _user_profiles_lock:
-        # Double-check after acquiring lock
         now = datetime.now(timezone.utc)
         if (
             _user_profiles is None
@@ -136,11 +149,12 @@ def get_user_profile(user_id):
         ):
             _user_profiles = build_user_profiles()
             _user_profiles_last_refresh = now
-
     if _user_profiles is None:
         return None
-
-    return _user_profiles.get(user_id)
+    profile = _user_profiles.get(user_id)
+    if profile:
+        redis_client.setex(cache_key, PROFILE_REFRESH_SECONDS, pickle.dumps(profile))
+    return profile
 
 def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
     """Search products by category when fuzzy search returns no results"""
@@ -193,26 +207,36 @@ def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
 
 
 def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
-    products_df, _, _ = _load_products()
+    # Cache-aside: Try Redis cache for search results
+    cache_key = f"search:{query}:{user_id}:{cluster}:{ab_group}:{limit}"
+    cached = redis_client.get(cache_key)
+    if cached:
+        return pickle.loads(cached)
+
+    # Use PostgreSQL full-text search if available
+    products_df = get_products_df(search_query=query)
     if products_df is None or products_df.empty:
         return []
-    
+
     profile = get_user_profile(user_id)
 
-    # --- Filter products by fuzzy query match ---
-    query_words = [w.lower() for w in query.strip().split() if w]
-    def fuzzy_match(text, words, threshold=FUZZY_MATCH_THRESHOLD):
-        text = text.lower()
-        for w in words:
-            if w in text:
-                return True
-            for token in text.split():
-                if difflib.SequenceMatcher(None, w, token).ratio() >= threshold:
+    # If not using PostgreSQL, fallback to fuzzy match
+    if products_df.shape[0] > 0 and 'title' in products_df.columns and 'description' in products_df.columns and products_df.shape[0] < 10000:
+        # For small datasets or non-Postgres, fallback to fuzzy
+        query_words = [w.lower() for w in query.strip().split() if w]
+        def fuzzy_match(text, words, threshold=FUZZY_MATCH_THRESHOLD):
+            text = text.lower()
+            for w in words:
+                if w in text:
                     return True
-        return False
-
-    filtered_products = [row for _, row in products_df.iterrows()
-        if fuzzy_match(str(row.title) + ' ' + str(row.description), query_words)]
+                for token in text.split():
+                    if difflib.SequenceMatcher(None, w, token).ratio() >= threshold:
+                        return True
+            return False
+        filtered_products = [row for _, row in products_df.iterrows()
+            if fuzzy_match(str(row.title) + ' ' + str(row.description), query_words)]
+    else:
+        filtered_products = [row for _, row in products_df.iterrows()]
 
     # --- A/B testing logic ---
     if ab_group == "B":
@@ -293,4 +317,6 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
             "score": round(final_score, 3)
         })
 
-    return sorted(results, key=lambda x: x["score"], reverse=True)[:limit]
+    results = sorted(results, key=lambda x: x["score"], reverse=True)[:limit]
+    redis_client.setex(cache_key, 300, pickle.dumps(results))  # 5 min expiry
+    return results

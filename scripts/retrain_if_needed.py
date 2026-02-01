@@ -9,44 +9,30 @@ from backend.services.retrain_trigger import (
     mark_clusters_retrained,
     get_status
 )
+from backend.services.rq_jobs import enqueue_retrain_and_cluster
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-def retrain_model():
-    logger.info("Retraining ML model")
-    subprocess.run(
-        [sys.executable, "-m", "ml.train_ranker"],
-        check=True,
-        cwd=PROJECT_ROOT
-    )
-    mark_model_retrained()
 
-def retrain_clusters():
-    logger.info("Updating user clusters")
-    subprocess.run(
-        [sys.executable, "-m", "ml.assign_user_clusters"],
-        check=True,
-        cwd=PROJECT_ROOT
-    )
+def retrain_and_cluster():
+    logger.info("Enqueuing retrain+cluster job to RQ...")
+    job = enqueue_retrain_and_cluster()
+    logger.info(f"Enqueued retrain+cluster job: {job.id}")
+    mark_model_retrained()
     mark_clusters_retrained()
 
 def main():
     status = get_status()
 
-    if should_retrain_model():
-        logger.info(
-            f"Model retrain triggered after {status['events_since_model_retrain']} events"
-        )
-        retrain_model()
-
-    if should_retrain_clusters():
-        logger.info(
-            f"Cluster update triggered after {status['events_since_cluster_retrain']} events"
-        )
-        retrain_clusters()
+    # Only enqueue if either retrain or clustering is needed
+    if should_retrain_model() or should_retrain_clusters():
+        logger.info("Retrain or clustering needed. Enqueuing combined job...")
+        retrain_and_cluster()
+    else:
+        logger.info("No retrain or clustering needed at this time.")
 
 if __name__ == "__main__":
     main()
