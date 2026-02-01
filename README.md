@@ -3,14 +3,19 @@
 ## Live Demo
 🔗 **https://srbmaury.pythonanywhere.com**
 
+## Project Structure
+**[Visualize the whole project structure here](https://yaml-visualizer.netlify.app/shared/kj3DX-KHCs)**
+
 ## Project Overview
-A personalized ecommerce search engine with user authentication, event logging, ML-based ranking, and user clustering for segment-based recommendations.
+A personalized ecommerce search engine with user authentication, event logging, ML-based ranking, user clustering, full-text search (PostgreSQL tsvector), Redis caching, and background job processing via message queue (RQ).
 
 ## Tech Stack
-- **Backend:** Flask, Flask-CORS, SQLAlchemy
-- **Database:** PostgreSQL (Neon) / SQLite
+- **Backend:** Flask, Flask-CORS, SQLAlchemy, Redis, RQ (Redis Queue)
+- **Database:** PostgreSQL (Neon, with tsvector full-text search) / SQLite (local)
 - **Frontend:** React, Vite, TailwindCSS-inspired styling
 - **ML:** scikit-learn, pandas, NumPy, joblib
+- **Caching:** Redis (product, session, and query cache)
+- **Message Queue:** RQ (Redis Queue) for background jobs (model retrain, clustering, analytics)
 
 ---
 
@@ -46,7 +51,7 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 2. Configure Database
+### 2. Configure Environment & Services
 
 Create a `.env` file in the root directory:
 
@@ -54,289 +59,238 @@ Create a `.env` file in the root directory:
 cp .env.example .env
 ```
 
+Set the following variables in `.env`:
+- `DATABASE_URL` (PostgreSQL recommended, supports tsvector full-text search)
+- `REDIS_URL` (e.g. `redis://localhost:6379/0`)
+- Other secrets as needed
+
 #### Option A: Use Neon PostgreSQL (Recommended for Production)
-1. Sign up at [neon.tech](https://neon.tech) (free tier available)
-2. Create a new project
-3. Copy your connection string
-4. Edit `.env` and set:
-```env
-DATABASE_URL=postgresql://user:password@ep-xxxxx.us-east-2.aws.neon.tech/dbname?sslmode=require
-```
+- Sign up at [neon.tech](https://neon.tech)
+- Create a project, copy connection string
+- Edit `.env`:
+   ```env
+   DATABASE_URL=postgresql://user:password@ep-xxxxx.us-east-2.aws.neon.tech/dbname?sslmode=require
+   REDIS_URL=redis://localhost:6379/0
+   ```
 
-#### Option B: Use SQLite (For Local Development)
-Leave `DATABASE_URL` empty or set to:
-```env
-DATABASE_URL=sqlite:///data/ecommerce.db
-```
+#### Option B: Use SQLite (Local Only)
+- Set:
+   ```env
+   DATABASE_URL=sqlite:///data/ecommerce.db
+   REDIS_URL=redis://localhost:6379/0
+   ```
 
-### 3. Initialize Database Tables
+### 3. Initialize Database & Redis
+- Tables are created automatically on first backend run
+- Redis must be running for caching and background jobs
 
-The database tables are created automatically when you start the backend server for the first time.
+### 4. Populate the Database
+- Use the fake data generator for testing:
+  ```bash
+  # Terminal 1: Start backend
+  python -m backend.app
+  # Terminal 2: Generate data
+  python -m ml.generate_fake_data
+  ```
+- Or load your own product data using a custom script (see example in previous README)
 
-### 4. Populate the Database with Product Data
+### 5. Background Jobs & Model Training
+- RQ worker must be running for background jobs:
+   ```bash
+   python -m backend.worker
+   ```
+- Train ranking model:
+   ```bash
+   python -m ml.train_ranker
+   ```
+- Cluster users:
+   ```bash
+   python -m ml.assign_user_clusters
+   ```
+- Analytics:
+   ```bash
+   python ml/analytics.py
+   ```
 
-To populate the database with initial product data, you can use one of the following methods:
-
-#### Option A: Use the Fake Data Generator (Recommended for Testing)
-
-Generate synthetic product, user, and event data for testing:
-
-**Important:** Backend server must be running first!
-
-```bash
-# Terminal 1: Start backend
-source venv/bin/activate
-python -m backend.app
-
-# Terminal 2: Generate data
-source venv/bin/activate
-python -m ml.generate_fake_data
-```
-
-This creates:
-- 100 synthetic products with realistic categories and pricing
-- Test users (testuser1-30)
-- Search/click/cart events stored directly in the database
-
-#### Option B: Load Your Own Product Data
-
-Create a Python script to load your products into the database:
-
-```python
-from backend.database import init_db
-from backend.services.db_product_service import create_product
-
-# Initialize the database
-init_db()
-
-# Add your products
-products_data = [
-    {
-        'title': 'Product Name',
-        'description': 'Product description',
-        'category': 'Category Name',
-        'price': 29.99,
-        'rating': 4.5,
-        'review_count': 100,
-        'popularity': 0
-    },
-    # Add more products...
-]
-
-for product in products_data:
-    create_product(**product)
-
-print(f"Loaded {len(products_data)} products")
-```
-
-Save this as `load_products.py` and run:
-```bash
-python load_products.py
-```
-
-### 5. Train the Ranking Model
-```bash
-python -m ml.train_ranker
-```
-- Trains the ML model using data from the database
-- Saves the model for use in ranking
-
-### 6. Cluster Users (User Segmentation)
-```bash
-python -m ml.assign_user_clusters
-```
-- Assigns each user to a cluster based on their behavior
-- Clusters are stored in the database
-
-### 7. Run the Backend Server
+### 6. Run the Backend Server
 ```bash
 python -m backend.app
 ```
-- The Flask server will start on http://127.0.0.1:5000
-- Database connection is initialized automatically
+- Flask server starts at http://127.0.0.1:5000
+- Redis and RQ worker must be running for full functionality
 
-### 8. Run the Frontend
-**Important:** The frontend must be served via HTTP (not opened directly as a file://) to work with CORS and API calls.
+### 7. Run the Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Frontend available at http://localhost:5173
 
-#### Option A: Using VS Code Live Server (Recommended)
-1. Install the "Live Server" extension in VS Code (by Ritwick Dey)
-2. Right-click on `frontend/index.html` and select "Open with Live Server"
-3. The frontend will open at `http://localhost:5500` or `http://127.0.0.1:5500`
+---
 
-#### Option B: Using Python's Built-in HTTP Server
-1. Navigate to the frontend directory:
-   ```
-   cd frontend
-   ```
-2. Start the HTTP server on port 5500:
-   ```
-   python -m http.server 5500
-   ```
-3. Open your browser and navigate to `http://localhost:5500`
-
-#### Option C: Custom Port (Advanced)
-If you need to use a different port, you'll need to update the CORS configuration:
-1. Set the `ALLOWED_ORIGINS` environment variable:
-   ```
-   export ALLOWED_ORIGINS="http://localhost:YOUR_PORT,http://127.0.0.1:YOUR_PORT"
-   ```
-2. Restart the backend server
-
-Once the frontend is running:
-- Use the UI to sign up, log in, search, and interact with products.
-- **Analytics Dashboard:**
-  - Click the **Analytics** button (top-left) in the UI to open the live analytics dashboard, which is served by the backend at `/analytics`.
-  - Alternatively, visit [http://localhost:5000/analytics](http://localhost:5000/analytics) in your browser to view A/B test metrics, CTR, conversion rates, cluster sizes, and top queries.
+---
+## Full-Text Search (PostgreSQL tsvector)
+- Product search uses PostgreSQL's tsvector for fast, fuzzy, and ranked full-text queries
+- For large catalogs, tsvector enables scalable search and filtering
 
 ---
 
 ## Features
 
 ### Core Features
-- **Signup/Login:** Persistent user authentication with hashed passwords stored in database.
-- **Event Logging:** All clicks and add-to-cart actions are logged in the database.
-- **ML Ranking:** Product ranking is personalized using user profile, cluster preferences, and recent user activity.
-- **User Clustering:** Users are grouped by behavior for segment-based recommendations.
-- **A/B Testing:** Users are randomly assigned to group A (full personalization) or B (popularity baseline) at signup.
-- **Fuzzy Search:** Search results require at least one fuzzy-matched word from the query in the product title or description.
-- **Recent Usage Boost:** Products you recently clicked or added to cart are boosted to the top of your search results.
-- **Auto-Retrain:** The backend automatically retrains the model (every 500 events or 24h) and re-clusters users (every 200 events or 6h) while running.
+- **Signup/Login:** Persistent user authentication with hashed passwords
+- **Event Logging:** All clicks and cart actions logged
+- **ML Ranking:** Personalized product ranking (user profile, cluster, recent activity)
+- **User Clustering:** Segment-based recommendations
+- **A/B Testing:** Random assignment to personalized or popularity-based group
+- **Full-Text Search:** Fast, fuzzy, ranked search via PostgreSQL tsvector
+- **Redis Caching:** Product, session, and query cache for performance
+- **Background Jobs:** Model retrain, clustering, analytics via RQ worker
+- **Recent Usage Boost:** Recently interacted products boosted in results
+- **Auto-Retrain:** Model and clusters retrain automatically (event count/time)
 
 ### Search & Discovery
-- **Search Filters:** Filter results by category and price range (min/max).
-- **Sort Options:** Sort by price (low/high), rating, or popularity.
-- **Pagination:** Browse large result sets with page navigation (12 items per page).
-- **Product Detail Modal:** Click any product to view full details (title, price, category, rating, popularity, description).
+- **Search Filters:** Category, price range
+- **Sort Options:** Price, rating, popularity
+- **Pagination:** 12 items per page
+- **Product Detail Modal:** Full product info
+- **Full-Text Search:** tsvector-powered, fuzzy and ranked
 
 ### Shopping Cart
-- **Add to Cart:** Add products from search results, recommendations, or product modal.
-- **Cart Display:** View cart with item count and total price.
-- **Remove Items:** Remove individual items from cart.
-- **Clear Cart:** Clear all items at once.
-- **Persistent Cart:** Cart data persists across sessions (stored in the `cart_items` table, normalized by user and product).
+- **Add to Cart:** From search, recommendations, or modal
+- **Cart Display:** Item count, total price
+- **Remove/Clear Items:** Individual or all
+- **Persistent Cart:** Cart data stored per user
 
 ### Dynamic Popularity
-- **Click Tracking:** Product popularity increases by +1 on each click.
-- **Add to Cart Tracking:** Product popularity increases by +3 on each add-to-cart action.
+- **Click Tracking:** +1 popularity per click
+- **Add to Cart Tracking:** +3 popularity per add-to-cart
 
 ### User Experience
-- **Loading States:** Visual feedback during search, auth, and data fetching.
-- **Toast Notifications:** Success/error messages for user actions.
-- **Recommendations:** Personalized product recommendations based on user behavior.
-- **Recently Viewed:** Quick access to recently interacted products.
+- **Loading States:** Visual feedback
+- **Toast Notifications:** Success/error messages
+- **Recommendations:** Personalized suggestions
+- **Recently Viewed:** Quick access to recent products
 
 ### Analytics
-- Click the **Analytics** button in the UI or visit `/analytics` to view live dashboard metrics (CTR, conversion, clusters, queries, etc.).
-- Run `python ml/analytics.py` for a CLI summary of A/B group performance.
+- **Live Dashboard:** `/analytics` for CTR, conversion, clusters, queries
+- **CLI Analytics:** `python ml/analytics.py` for A/B group performance
+- **Background Jobs:** Analytics updates via RQ worker
+- Provides a live dashboard with charts for group metrics, CTR, conversion, user clusters, and top queries.
+- Uses [recharts](https://recharts.org/) for data visualization.
 
 ---
 
 
 ## Updating Clusters & Model
-- **Model:** Auto-retrains after 500 events or 24 hours (whichever comes first)
-- **Clusters:** Auto-update after 200 events or 6 hours (whichever comes first)
-- User profiles refresh every 5 minutes for near real-time personalization
-- Manual retrain: `python ml/train_ranker.py` and `python ml/assign_user_clusters.py`
+- **Model:** Auto-retrain after 500 events or 24h
+- **Clusters:** Auto-update after 200 events or 6h
+- **User Profiles:** Refresh every 5 minutes
+- **Manual retrain:**
+   ```bash
+   python ml/train_ranker.py
+   python ml/assign_user_clusters.py
+   ```
 
 ---
 
 ## File Structure
-- `backend/` - Flask API with database integration
-  - `models.py` - SQLAlchemy database models
-  - `database.py` - Database initialization
-  - `db_user_manager.py` - User database operations
-  - `db_product_service.py` - Product database operations
-  - `db_event_service.py` - Event database operations
-  - `controllers/` - Business logic (auth, cart, events, recommendations, search, analytics)
-  - `routes/` - API route definitions
-  - `services/` - Shared utilities (retrain triggers, user profiles, analytics HTML)
+- `backend/` - Flask API, database, Redis, RQ worker
+   - `models.py` - SQLAlchemy models
+   - `database.py` - DB init, tsvector setup
+   - `worker.py` - RQ worker for background jobs
+   - `controllers/` - Business logic (auth, cart, events, recommendations, search, analytics)
+   - `routes/` - API routes
+   - `services/` - Utilities (retrain triggers, user profiles, analytics, Redis cache)
+   - `utils/` - Config, database, search, sanitize
 - `frontend/` - React/Vite UI
-- `ml/` - Model training, feature engineering, user clustering
-- `data/` - SQLite database file (when using local development)
+- `ml/` - Model training, clustering, analytics
+- `data/` - SQLite DB (local)
 
 ---
 
 ## Troubleshooting
-- Ensure all dependencies are installed.
-- If you add new users or events, you can wait for the next auto-retrain or run clustering/model scripts manually.
-- If you see backend errors (e.g., IndentationError, SyntaxError), check for correct indentation and try re-running after fixing code.
-- For any issues, check the terminal output for errors.
+- Ensure all dependencies (Python, Node, Redis, PostgreSQL) are installed and running
+- If you add new users/events, wait for auto-retrain or run scripts manually
+- Check terminal output for errors
+- Redis must be running for caching and background jobs
 ---
 
 ## Next Steps
-
-1. Use the app as a user: sign up, log in, search, click, and add to cart.
-2. Wait for the backend to auto-retrain (or run model/cluster scripts manually) as you generate more data.
+1. Use the app: sign up, log in, search, click, add to cart
+2. Wait for backend auto-retrain or run model/cluster scripts manually
 3. Run analytics:
-  ```
-  python ml/analytics.py
-  ```
-  to compare A/B group performance (CTR, conversion, etc.).
-4. Analyze results and iterate on ranking, clustering, or UI as needed.
-5. (Optional) Deploy the backend and frontend for real users and collect more data.
+    ```bash
+    python ml/analytics.py
+    ```
+    to compare A/B group performance
+4. Analyze results and iterate on ranking, clustering, or UI
+5. (Optional) Deploy backend and frontend for real users
 
 ---
 
-## Deployment (PythonAnywhere)
-
+## Deployment (PythonAnywhere or VPS)
 1. **Clone the repository:**
    ```bash
    git clone https://github.com/srbmaury/Ecommerce-Search.git
    cd Ecommerce-Search
    ```
-
-2. **Set up database:**
-   - Create a `.env` file with your DATABASE_URL
-   - Tables are created automatically on first run
-
+2. **Set up environment:**
+   - Create `.env` with `DATABASE_URL` and `REDIS_URL`
+   - Tables and tsvector columns are created automatically
 3. **Set up WSGI configuration:**
-   - Source code: `/home/YOUR_USERNAME/Ecommerce-Search`
-   - WSGI file should import: `from backend.app import create_app`
-   - Application callable: `application = create_app()`
-
-4. **Frontend serving:**
-   - Static files are served from `frontend/dist/`
-   - Flask handles this automatically via `static_folder` configuration
-
-5. **Reload the web app** after any changes.
+   - Source: `/home/YOUR_USERNAME/Ecommerce-Search`
+   - WSGI file: `from backend.app import create_app`
+   - Application: `application = create_app()`
+4. **Start Redis and RQ worker:**
+   - Redis must be running
+   - Start worker: `python -m backend.worker`
+5. **Frontend serving:**
+   - Static files from `frontend/dist/`
+   - Flask serves via `static_folder` config
+6. **Reload web app** after changes
 
 ---
 
 ## Performance & Optimization
 
-### Caching
-- **Product Cache:** Products are cached for 5 minutes to reduce database load
-- **Connection Pooling:** PostgreSQL uses connection pool (size: 5, max overflow: 10)
-- **Efficient Queries:** Uses indexed columns and batch operations to minimize N+1 queries
+### Caching & Performance
+- **Redis Cache:** Products, sessions, queries cached for 5 minutes
+- **Connection Pooling:** PostgreSQL pool (size: 5, max overflow: 10)
+- **Efficient Queries:** Indexed columns, batch ops
+- **Background Jobs:** RQ worker for retrain, clustering, analytics
 
 ### Database Indexes
 - User: `user_id`, `username`, `cluster`
-- Product: `id` (auto-increment), `category`, `popularity`, composite index on `(category, price)`
-- CartItem: `id` (auto-increment), `user_id`, `product_id` (for fast cart queries)
-- SearchEvent: `user_id`, `event_type`, `timestamp`, `group`, composite indexes for analytics
+- Product: `id`, `category`, `popularity`, composite `(category, price)`, tsvector for search
+- CartItem: `id`, `user_id`, `product_id`
+- SearchEvent: `user_id`, `event_type`, `timestamp`, `group`, composite indexes
 
-### Scalability Considerations
-- Event table will grow large over time - consider archiving old events (>6 months)
-- For very large catalogs (>100k products), consider adding full-text search (PostgreSQL's `tsvector`)
+### Scalability
+- Event table grows large: archive old events (>6 months)
+- Full-text search (tsvector) for large catalogs
 
 ---
 
 ## Security Notes
 
 ### Current Implementation
-- ✅ Password hashing with bcrypt
-- ✅ Input validation and sanitization
-- ✅ SQL injection protection (parameterized queries via SQLAlchemy)
-- ✅ Foreign key constraints with CASCADE for data integrity
-- ✅ Environment-based configuration (DATABASE_URL not hardcoded)
+- ✅ Password hashing (bcrypt)
+- ✅ Input validation & sanitization
+- ✅ SQL injection protection (SQLAlchemy)
+- ✅ Foreign key constraints (CASCADE)
+- ✅ Environment-based config (`.env`)
+- ✅ Redis for session and cache
+- ✅ RQ for background jobs
 
 ### Production Recommendations
-- 🔒 Add rate limiting for auth endpoints (consider `flask-limiter`)
-- 🔒 Use HTTPS in production
-- 🔒 Set secure session cookies (`SESSION_COOKIE_SECURE=True`)
-- 🔒 Enable CSRF protection for state-changing operations
-- 🔒 Implement request logging and monitoring
-- 🔒 Regularly backup database and rotate credentials
+- 🔒 Rate limiting for auth endpoints (`flask-limiter` recommended)
+- 🔒 Use HTTPS
+- 🔒 Secure session cookies (`SESSION_COOKIE_SECURE=True`)
+- 🔒 CSRF protection for state-changing ops
+- 🔒 Request logging & monitoring
+- 🔒 Regular DB backups & credential rotation
 
 ---
 

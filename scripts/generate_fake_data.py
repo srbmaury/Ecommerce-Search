@@ -316,7 +316,6 @@ def add_to_cart_db_batch(cart_updates):
 
 def simulate_user(user_id, user_idx=None):
     """Simulate user behavior with batch operations for better performance."""
-    import time
     session = get_db_session()
     try:
         user = session.query(User).filter_by(user_id=user_id).first()
@@ -383,7 +382,6 @@ def simulate_user(user_id, user_idx=None):
 # Main
 # ----------------------------
 if __name__ == "__main__":
-    import time
     print("\n🚀 Starting fake data generation...")
     print(f"   Creating {USER_COUNT} users with {EVENTS_PER_USER} events each")
     total_start = time.time()

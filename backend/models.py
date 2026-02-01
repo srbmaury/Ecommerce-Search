@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey, JSON, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship, backref
+from sqlalchemy.dialects.postgresql import TSVECTOR
 
 Base = declarative_base()
 
@@ -55,10 +56,14 @@ class Product(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     
-    # Indexes for common queries
+    # Full-text search vector (PostgreSQL only; ignored by SQLite)
+    search_vector = Column('search_vector', TSVECTOR, nullable=True)
+
+    # Indexes for common queries (GIN index is ignored by SQLite)
     __table_args__ = (
         Index('idx_product_category_price', 'category', 'price'),
         Index('idx_product_popularity', 'popularity'),
+        Index('ix_products_search_vector', 'search_vector', postgresql_using='gin'),
     )
     
     def __repr__(self):

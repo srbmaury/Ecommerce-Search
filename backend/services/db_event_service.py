@@ -31,27 +31,24 @@ def create_search_event(user_id, query, product_id, event_type, group='A', posit
         session.close()
 
 
-def get_events_df(since_hours=None, limit=None):
+def get_events_df(since_hours=None, limit=None, user_id=None, event_types=None):
     """Get search events as a pandas DataFrame (for ML compatibility)."""
     session = get_db_session()
     try:
         query = session.query(SearchEvent)
-        
+        if user_id:
+            query = query.filter(SearchEvent.user_id == str(user_id))
+        if event_types:
+            query = query.filter(SearchEvent.event_type.in_(event_types))
         if since_hours:
             cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
             query = query.filter(SearchEvent.timestamp >= cutoff)
-        
         query = query.order_by(desc(SearchEvent.timestamp))
-        
-        # Apply limit if specified to prevent loading too much data
         if limit:
             query = query.limit(limit)
-        
         events = query.all()
-        
         if not events:
             return pd.DataFrame()
-        
         events_data = [{
             'user_id': e.user_id,
             'query': e.query,
@@ -61,7 +58,6 @@ def get_events_df(since_hours=None, limit=None):
             'group': e.group,
             'position': e.position
         } for e in events]
-        
         df = pd.DataFrame(events_data)
         return df
     finally:

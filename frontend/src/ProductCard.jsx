@@ -36,68 +36,87 @@ export default function ProductCard({
 
     const addToCart = async (e) => {
         e.stopPropagation();
-        
-        const res = await fetch(`${API_BASE_URL}/cart`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: userId,
-                product_id: product.product_id,
-                query: query || ''
-            })
-        });
-
-        const data = await res.json();
-        
-        if (!res.ok) {
-            // If user not found, show error and suggest re-login
-            if (res.status === 404) {
-                alert('Session expired. Please login again.');
-                // Clear localStorage to force re-login
-                localStorage.removeItem('user');
-                window.location.reload();
-                return;
-            }
-            alert(data.error || 'Failed to add to cart');
-            return;
-        }
-
+        // Optimistic UI update
+        let newQuantity;
         if (!added) {
             setAdded(true);
             setQuantity(1);
+            newQuantity = 1;
         } else {
-            setQuantity(prev => prev + 1);
+            setQuantity(prev => {
+                newQuantity = prev + 1;
+                return newQuantity;
+            });
         }
-        if (onCartUpdate) onCartUpdate();
+        if (onCartUpdate) onCartUpdate(1); // +1 delta
+
+        // Async backend update
+        try {
+            const res = await fetch(`${API_BASE_URL}/cart`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    product_id: product.product_id,
+                    query: query || ''
+                })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                // Revert optimistic update if backend fails
+                setQuantity(prev => (prev > 1 ? prev - 1 : 0));
+                if (newQuantity <= 1) setAdded(false);
+                if (res.status === 404) {
+                    alert('Session expired. Please login again.');
+                    localStorage.removeItem('user');
+                    window.location.reload();
+                    return;
+                }
+                alert(data.error || 'Failed to add to cart');
+            }
+        } catch {
+            setQuantity(prev => (prev > 1 ? prev - 1 : 0));
+            if (newQuantity <= 1) setAdded(false);
+            alert('Network error. Please try again.');
+        }
     };
 
     const decrementCart = async (e) => {
         e.stopPropagation();
-        
-        await fetch(`${API_BASE_URL}/cart/remove`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: userId,
-                product_id: product.product_id
-            })
+        // Optimistic UI update
+        let newQuantity;
+        setQuantity(prev => {
+            newQuantity = prev - 1;
+            return Math.max(0, newQuantity);
         });
-
         if (quantity <= 1) {
             setAdded(false);
-            setQuantity(0);
-        } else {
-            setQuantity(prev => prev - 1);
         }
-        if (onCartUpdate) onCartUpdate();
+        if (onCartUpdate) onCartUpdate(-1); // -1 delta
+
+        // Async backend update
+        try {
+            await fetch(`${API_BASE_URL}/cart/remove`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    product_id: product.product_id
+                })
+            });
+        } catch {
+            // Optionally revert UI or show error
+        }
     };
 
     const onClick = async (e) => {
         if (e.target.tagName === 'BUTTON') return;
-        if (!isRecommendation) {
-            await logEvent('click', product.product_id, query, userId);
-        }
+        // Optimistic UI: call onProductClick immediately
         if (onProductClick) onProductClick(product);
+        // Async backend update
+        if (!isRecommendation) {
+            logEvent('click', product.product_id, query, userId);
+        }
     };
 
     return (
