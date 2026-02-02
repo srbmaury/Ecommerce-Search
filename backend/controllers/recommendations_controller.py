@@ -1,4 +1,5 @@
-import redis
+import os
+import requests
 import json
 from sqlalchemy import desc
 
@@ -19,9 +20,29 @@ CANDIDATE_LIMIT = 200
 FINAL_LIMIT = 10
 MAX_PER_CATEGORY = 3
 
-redis_client = redis.Redis(
-    host="localhost", port=6379, db=0, decode_responses=True
-)
+
+# Upstash Redis REST API config
+UPSTASH_REDIS_REST_URL = os.getenv('UPSTASH_REDIS_REST_URL')
+UPSTASH_REDIS_REST_TOKEN = os.getenv('UPSTASH_REDIS_REST_TOKEN')
+
+def redis_get(key):
+    if not UPSTASH_REDIS_REST_URL or not UPSTASH_REDIS_REST_TOKEN:
+        return None
+    url = f"{UPSTASH_REDIS_REST_URL}/get/{key}"
+    headers = {"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 200:
+        data = resp.json().get('result')
+        if data is not None:
+            return data
+    return None
+
+def redis_setex(key, seconds, value):
+    if not UPSTASH_REDIS_REST_URL or not UPSTASH_REDIS_REST_TOKEN:
+        return
+    url = f"{UPSTASH_REDIS_REST_URL}/setex/{key}/{seconds}"
+    headers = {"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"}
+    requests.post(url, headers=headers, data=value)
 
 # ---------------------------------------
 
@@ -31,7 +52,7 @@ def recommendations_controller(user_id):
         return {"error": "user_id required"}, 400
 
     cache_key = f"recommendations:{user_id}"
-    cached = redis_client.get(cache_key)
+    cached = redis_get(cache_key)
     if cached:
         return json.loads(cached), 200
 
@@ -79,7 +100,7 @@ def recommendations_controller(user_id):
     cluster_category_boost = {}
     if cluster is not None:
         boost_key = f"cluster_boost:{cluster}"
-        cached_boost = redis_client.get(boost_key)
+        cached_boost = redis_get(boost_key)
         if cached_boost:
             cluster_category_boost = json.loads(cached_boost)
         else:
@@ -98,9 +119,7 @@ def recommendations_controller(user_id):
                 cluster_category_boost = {
                     k: v / total for k, v in cat_counts.items()
                 }
-                redis_client.setex(
-                    boost_key, 3600, json.dumps(cluster_category_boost)
-                )
+                redis_setex(boost_key, 3600, json.dumps(cluster_category_boost))
 
     # -------- candidate generation (CRITICAL FIX) --------
     session = get_db_session()
@@ -172,5 +191,5 @@ def recommendations_controller(user_id):
         per_category[product.category] = count + 1
 
     result = {"recent": recent_products, "similar": similar}
-    redis_client.setex(cache_key, CACHE_DURATION_SECONDS, json.dumps(result))
+    redis_setex(cache_key, CACHE_DURATION_SECONDS, json.dumps(result))
     return result, 200

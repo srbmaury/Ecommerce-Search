@@ -1,8 +1,34 @@
-import redis
-import pickle
 
-# Initialize Redis client (default: localhost:6379)
-redis_client = redis.Redis(host='localhost', port=6379, db=0)
+import os
+import pickle
+import requests
+
+# Upstash Redis REST API config
+UPSTASH_REDIS_REST_URL = os.getenv('UPSTASH_REDIS_REST_URL')
+UPSTASH_REDIS_REST_TOKEN = os.getenv('UPSTASH_REDIS_REST_TOKEN')
+
+def redis_get(key):
+    if not UPSTASH_REDIS_REST_URL or not UPSTASH_REDIS_REST_TOKEN:
+        return None
+    url = f"{UPSTASH_REDIS_REST_URL}/get/{key}"
+    headers = {"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"}
+    resp = requests.get(url, headers=headers)
+    if resp.status_code == 200:
+        data = resp.json().get('result')
+        if data is not None:
+            try:
+                return pickle.loads(bytes.fromhex(data))
+            except Exception:
+                return None
+    return None
+
+def redis_setex(key, seconds, value):
+    if not UPSTASH_REDIS_REST_URL or not UPSTASH_REDIS_REST_TOKEN:
+        return
+    url = f"{UPSTASH_REDIS_REST_URL}/setex/{key}/{seconds}"
+    headers = {"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"}
+    data = pickle.dumps(value).hex()
+    requests.post(url, headers=headers, data=data)
 
 import pandas as pd
 from datetime import datetime, timezone
@@ -125,9 +151,9 @@ def get_user_profile(user_id):
 
     # Cache-aside: Try Redis cache first
     cache_key = f"user_profile:{user_id}"
-    cached = redis_client.get(cache_key)
+    cached = redis_get(cache_key)
     if cached:
-        return pickle.loads(cached)
+        return cached
 
     # Fallback to in-memory and DB
     now = datetime.now(timezone.utc)
@@ -136,7 +162,7 @@ def get_user_profile(user_id):
         (now - _user_profiles_last_refresh).total_seconds() <= PROFILE_REFRESH_SECONDS):
         profile = _user_profiles.get(user_id) if _user_profiles else None
         if profile:
-            redis_client.setex(cache_key, PROFILE_REFRESH_SECONDS, pickle.dumps(profile))
+            redis_setex(cache_key, PROFILE_REFRESH_SECONDS, profile)
         return profile
 
     # Reload with lock (slow path)
@@ -153,7 +179,7 @@ def get_user_profile(user_id):
         return None
     profile = _user_profiles.get(user_id)
     if profile:
-        redis_client.setex(cache_key, PROFILE_REFRESH_SECONDS, pickle.dumps(profile))
+        redis_setex(cache_key, PROFILE_REFRESH_SECONDS, profile)
     return profile
 
 def search_by_category(category, user_id, cluster=None, ab_group="A", limit=50):
@@ -318,5 +344,5 @@ def search_products(query, user_id, cluster=None, ab_group="A", limit=10):
         })
 
     results = sorted(results, key=lambda x: x["score"], reverse=True)[:limit]
-    redis_client.setex(cache_key, 300, pickle.dumps(results))  # 5 min expiry
+    redis_setex(cache_key, 300, results)  # 5 min expiry
     return results
