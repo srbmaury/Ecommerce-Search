@@ -1,20 +1,5 @@
 import { useState, useEffect } from 'react';
-import API_BASE_URL from './config';
-
-async function logEvent(eventType, productId, query, userId) {
-    try {
-        await fetch(`${API_BASE_URL}/event`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                user_id: userId,
-                query: query || '',
-                product_id: productId,
-                event: eventType
-            })
-        });
-    } catch { }
-}
+import { addToCart, removeFromCart, logEvent } from './api';
 
 export default function ProductCard({
     product,
@@ -34,9 +19,8 @@ export default function ProductCard({
         setAdded(cartQuantity > 0);
     }, [cartQuantity]);
 
-    const addToCart = async (e) => {
+    const handleAddToCart = async (e) => {
         e.stopPropagation();
-        // Optimistic UI update
         let newQuantity;
         if (!added) {
             setAdded(true);
@@ -48,42 +32,18 @@ export default function ProductCard({
                 return newQuantity;
             });
         }
-        if (onCartUpdate) onCartUpdate(1); // +1 delta
-
-        // Async backend update
+        if (onCartUpdate) onCartUpdate(1);
         try {
-            const res = await fetch(`${API_BASE_URL}/cart`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    product_id: product.product_id,
-                    query: query || ''
-                })
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                // Revert optimistic update if backend fails
-                setQuantity(prev => (prev > 1 ? prev - 1 : 0));
-                if (newQuantity <= 1) setAdded(false);
-                if (res.status === 404) {
-                    alert('Session expired. Please login again.');
-                    localStorage.removeItem('user');
-                    window.location.reload();
-                    return;
-                }
-                alert(data.error || 'Failed to add to cart');
-            }
-        } catch {
+            await addToCart(userId, product.product_id, query || '');
+        } catch (err) {
             setQuantity(prev => (prev > 1 ? prev - 1 : 0));
             if (newQuantity <= 1) setAdded(false);
-            alert('Network error. Please try again.');
+            alert(err.message || 'Failed to add to cart');
         }
     };
 
-    const decrementCart = async (e) => {
+    const handleRemoveFromCart = async (e) => {
         e.stopPropagation();
-        // Optimistic UI update
         let newQuantity;
         setQuantity(prev => {
             newQuantity = prev - 1;
@@ -92,18 +52,9 @@ export default function ProductCard({
         if (quantity <= 1) {
             setAdded(false);
         }
-        if (onCartUpdate) onCartUpdate(-1); // -1 delta
-
-        // Async backend update
+        if (onCartUpdate) onCartUpdate(-1);
         try {
-            await fetch(`${API_BASE_URL}/cart/remove`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    product_id: product.product_id
-                })
-            });
+            await removeFromCart(userId, product.product_id);
         } catch {
             // Optionally revert UI or show error
         }
@@ -111,35 +62,25 @@ export default function ProductCard({
 
     const onClick = async (e) => {
         if (e.target.tagName === 'BUTTON') return;
-        // Optimistic UI: call onProductClick immediately
         if (onProductClick) onProductClick(product);
-        // Async backend update
         if (!isRecommendation) {
-            logEvent('click', product.product_id, query, userId);
+            try {
+                await logEvent('click', product.product_id, query, userId);
+            } catch { }
         }
     };
 
     return (
         <div className="product-card" onClick={onClick}>
             <div className="pc-title">{product.title}</div>
-
-            <div className="pc-price">
-                ${product.price?.toFixed(2)}
-            </div>
-
-            <div className="pc-meta">
-                {product.category} • Rating: {product.rating}
-            </div>
-
+            <div className="pc-price">${product.price?.toFixed(2)}</div>
+            <div className="pc-meta">{product.category} • Rating: {product.rating}</div>
             {!added ? (
-                <button
-                    className="pc-btn"
-                    onClick={addToCart}
-                >
+                <button className="pc-btn" onClick={handleAddToCart}>
                     Add to Cart
                 </button>
             ) : (
-                <div className="quantity-controls" onClick={(e) => e.stopPropagation()} style={{
+                <div className="quantity-controls" onClick={e => e.stopPropagation()} style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -147,7 +88,7 @@ export default function ProductCard({
                     padding: '8px'
                 }}>
                     <button
-                        onClick={decrementCart}
+                        onClick={handleRemoveFromCart}
                         style={{
                             width: '32px',
                             height: '32px',
@@ -169,11 +110,9 @@ export default function ProductCard({
                         fontWeight: 'bold',
                         minWidth: '30px',
                         textAlign: 'center'
-                    }}>
-                        {quantity}
-                    </span>
+                    }}>{quantity}</span>
                     <button
-                        onClick={addToCart}
+                        onClick={handleAddToCart}
                         style={{
                             width: '32px',
                             height: '32px',

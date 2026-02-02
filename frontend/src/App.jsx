@@ -1,8 +1,16 @@
 import { useState, useEffect } from 'react';
 import ProductCard from './ProductCard';
 import './App.css';
-import API_BASE_URL from './config';
-import { fetchRecommendations } from './api';
+import {
+	fetchRecommendations,
+	searchProducts,
+	fetchCart,
+	addToCart,
+	removeFromCart,
+	clearCart,
+	login,
+	signup
+} from './api';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
 
@@ -64,37 +72,20 @@ export default function App() {
 		e.preventDefault();
 		setSearchLoading(true);
 		setCurrentPage(1);
-
 		try {
-			const res = await fetch(
-				`${API_BASE_URL}/search?q=${encodeURIComponent(query)}&user_id=${user.user_id}`
-			);
-			if (!res.ok) {
-				showToast('Search failed. Please try again.');
-				return;
-			}
-			const data = await res.json();
+			const data = await searchProducts(query, user.user_id);
 			let products = Array.isArray(data) ? data : (data.products || []);
 			setResults(products);
-
-			// Auto-apply intent suggestions
 			if (data.intent) {
 				const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
-
-				// Apply all filters together to avoid race conditions
-				const newCategory = (suggested_category && products.some(p => p.category === suggested_category))
-					? suggested_category
-					: '';
+				const newCategory = (suggested_category && products.some(p => p.category === suggested_category)) ? suggested_category : '';
 				const newSort = suggested_sort || '';
 				const newMinPrice = suggested_min_price ? String(suggested_min_price) : '';
 				const newMaxPrice = suggested_max_price ? String(suggested_max_price) : '';
-
 				setCategoryFilter(newCategory);
 				setSortBy(newSort);
 				setMinPrice(newMinPrice);
 				setMaxPrice(newMaxPrice);
-
-				// Show toast only for actionable intents (sort or price filters, not just category)
 				const actionableIntents = (detected || []).filter(i => i !== 'category');
 				if (actionableIntents.length > 0) {
 					const intentMsg = actionableIntents.map(i => i.replace('_', ' ')).join(', ');
@@ -148,12 +139,11 @@ export default function App() {
 		currentPage * ITEMS_PER_PAGE
 	);
 
-	const fetchCart = async () => {
+	const fetchCartData = async () => {
 		if (!user) return;
 		setCartLoading(true);
 		try {
-			const res = await fetch(`${API_BASE_URL}/cart?user_id=${user.user_id}`);
-			const data = await res.json();
+			const data = await fetchCart(user.user_id);
 			setCart(data.items || []);
 			setCartCount(data.count || 0);
 			setCartTotal(data.total || 0);
@@ -170,7 +160,7 @@ export default function App() {
 
 	// Unified cart update for ProductCard and everywhere
 	const handleCartUpdate = () => {
-		fetchCart();
+		fetchCartData();
 	};
 
 	useEffect(() => {
@@ -186,52 +176,30 @@ export default function App() {
 				setRecommended([]);
 			})
 			.finally(() => setRecsLoading(false));
-		fetchCart();
+		fetchCartData();
 	}, [user]);
 
-	const removeFromCart = async (productId) => {
-		await fetch(`${API_BASE_URL}/cart/remove`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ user_id: user.user_id, product_id: productId })
-		});
-		fetchCart();
+	const removeFromCartHandler = async (productId) => {
+		await removeFromCart(user.user_id, productId);
+		fetchCartData();
 	};
 
-	const clearCart = async () => {
-		await fetch(`${API_BASE_URL}/cart/clear`, {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ user_id: user.user_id })
-		});
-		fetchCart();
+	const clearCartHandler = async () => {
+		await clearCart(user.user_id);
+		fetchCartData();
 	};
 
 	const handleAuthSubmit = async (e) => {
 		e.preventDefault();
 		setAuthError("");
 		setAuthLoading(true);
-
 		try {
-			const res = await fetch(
-				`${API_BASE_URL}${isSignup ? '/signup' : '/login'}`,
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ username, password })
-				}
-			);
-
-			const data = await res.json();
-
-			if (!res.ok) {
-				setAuthError(data.error || 'Authentication failed');
-				return;
-			}
-
+			const data = isSignup
+				? await signup(username, password)
+				: await login(username, password);
 			setUser(data);
-		} catch {
-			setAuthError('Network error. Please try again.');
+		} catch (err) {
+			setAuthError(err.message || 'Network error. Please try again.');
 		} finally {
 			setAuthLoading(false);
 		}
@@ -354,7 +322,7 @@ export default function App() {
 										</div>
 										<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
 											<button
-												onClick={() => removeFromCart(item.product_id)}
+												onClick={() => removeFromCartHandler(item.product_id)}
 												style={{
 													width: '28px',
 													height: '28px',
@@ -376,11 +344,7 @@ export default function App() {
 											</span>
 											<button
 												onClick={async () => {
-													await fetch(`${API_BASE_URL}/cart`, {
-														method: 'POST',
-														headers: { 'Content-Type': 'application/json' },
-														body: JSON.stringify({ user_id: user.user_id, product_id: item.product_id, query: '' })
-													});
+													await addToCart(user.user_id, item.product_id, '');
 													fetchCart();
 												}}
 												style={{
@@ -405,7 +369,7 @@ export default function App() {
 							</div>
 							<div className="cart-footer">
 								<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
-								<button className="cart-clear-btn" onClick={clearCart}>Clear Cart</button>
+								<button className="cart-clear-btn" onClick={clearCartHandler}>Clear Cart</button>
 							</div>
 						</>
 					)}
@@ -440,11 +404,7 @@ export default function App() {
 										<button
 											className="modal-add-btn"
 											onClick={async () => {
-												await fetch(`${API_BASE_URL}/cart`, {
-													method: 'POST',
-													headers: { 'Content-Type': 'application/json' },
-													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
-												});
+												await addToCart(user.user_id, selectedProduct.product_id, '');
 												fetchCart();
 												showToast('Added to cart!', 'success');
 											}}
@@ -457,12 +417,8 @@ export default function App() {
 									<div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
 										<button
 											onClick={async () => {
-												await fetch(`${API_BASE_URL}/cart/remove`, {
-													method: 'POST',
-													headers: { 'Content-Type': 'application/json' },
-													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id })
-												});
-												fetchCart();
+												await removeFromCart(user.user_id, selectedProduct.product_id);
+												fetchCartData();
 											}}
 											style={{
 												width: '40px',
@@ -485,11 +441,7 @@ export default function App() {
 										</span>
 										<button
 											onClick={async () => {
-												await fetch(`${API_BASE_URL}/cart`, {
-													method: 'POST',
-													headers: { 'Content-Type': 'application/json' },
-													body: JSON.stringify({ user_id: user.user_id, product_id: selectedProduct.product_id, query: '' })
-												});
+												await addToCart(user.user_id, selectedProduct.product_id, '');
 												fetchCart();
 											}}
 											style={{

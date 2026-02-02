@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import API_BASE_URL from './config';
+import { fetchAnalytics } from './api';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#A28BFE', '#FF6F91', '#00B8A9', '#FFD166'];
 
@@ -12,8 +12,7 @@ export default function AnalyticsDashboard() {
   const [topQueries, setTopQueries] = useState({});
 
   useEffect(() => {
-    fetch(`${API_BASE_URL}/api/analytics`)
-      .then(res => res.json())
+    fetchAnalytics()
       .then(data => {
         if (data.error) throw new Error(data.error);
         setSummary(data.summary || {});
