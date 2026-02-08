@@ -35,7 +35,7 @@ def update_user_clusters(
 
     updated = 0
     for user_id, cluster_id in clusters.items():
-        user = users_by_id.get(str(user_id))
+        user = users_by_id.get(user_id)
         if user:
             user.cluster = int(cluster_id)
             updated += 1
