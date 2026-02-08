@@ -1,7 +1,7 @@
 # Ecommerce Search Engine
 
 ## Live Demo
-🔗 **https://srbmaury.pythonanywhere.com**
+🔗 **https://ecommerce-search.onrender.com/**
 
 ## Project Structure
 **[Visualize the whole project structure here](https://yaml-visualizer.netlify.app/shared/kj3DX-KHCs)**
