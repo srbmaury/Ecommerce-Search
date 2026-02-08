@@ -1,52 +1,108 @@
+"""
+Application configuration utilities.
+
+Responsibilities:
+- Configure CORS safely
+- Resolve database URL with sane defaults
+- Normalize database URLs for SQLAlchemy compatibility
+"""
+
 import os
 import logging
+from pathlib import Path
 from urllib.parse import urlparse, urlunparse
+
 from flask_cors import CORS
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+
+# ---------- LOGGING ----------
+
+logger = logging.getLogger("app_config")
+
+
+# ---------- CORS ----------
+
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5500",
+    "http://127.0.0.1:5500",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
 
 def configure_cors(app):
-    origins = os.getenv("ALLOWED_ORIGINS")
-    if origins:
-        origins = [o.strip() for o in origins.split(",")]
+    """
+    Configure CORS for the Flask app.
+
+    Reads ALLOWED_ORIGINS from environment (comma-separated).
+    Falls back to sensible local-dev defaults.
+    """
+    origins_env = os.getenv("ALLOWED_ORIGINS")
+
+    if origins_env:
+        origins = [o.strip() for o in origins_env.split(",") if o.strip()]
+        logger.info("CORS enabled for configured origins: %s", origins)
     else:
-        origins = [
-            "http://localhost:5500",
-            "http://127.0.0.1:5500",
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ]
+        origins = DEFAULT_CORS_ORIGINS
+        logger.info("CORS enabled for default dev origins")
 
     CORS(
         app,
         resources={r"/*": {"origins": origins}},
-        supports_credentials=True
+        supports_credentials=True,
     )
 
 
+# ---------- DATABASE URL ----------
+
 def get_database_url():
-    """Get database URL from environment or use default SQLite."""
+    """
+    Resolve database URL.
+
+    Priority:
+    1. DATABASE_URL environment variable
+    2. Local SQLite database (development)
+
+    Also normalizes postgres:// URLs to postgresql://
+    for SQLAlchemy compatibility.
+    """
     database_url = os.getenv("DATABASE_URL")
-    
+
     if not database_url:
-        # Default to SQLite for development
-        db_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "ecommerce.db")
+        db_path = (
+            Path(__file__)
+            .resolve()
+            .parent.parent
+            / "data"
+            / "ecommerce.db"
+        )
         database_url = f"sqlite:///{db_path}"
-    
-    # Handle postgres:// URLs (convert to postgresql:// for SQLAlchemy)
-    # Use proper URL parsing to preserve query parameters and other components
+        logger.info("Using local SQLite database: %s", db_path)
+
+    database_url = _normalize_database_url(database_url)
+    return database_url
+
+
+def _normalize_database_url(database_url: str) -> str:
+    """
+    Normalize database URLs for SQLAlchemy.
+
+    Converts:
+        postgres:// -> postgresql://
+    while preserving all URL components.
+    """
     if database_url.startswith("postgres://"):
-        logger.info("Converting postgres:// URL to postgresql:// for SQLAlchemy compatibility")
+        logger.info(
+            "Normalizing postgres:// URL to postgresql:// for SQLAlchemy"
+        )
         parsed = urlparse(database_url)
-        # Reconstruct with postgresql scheme while preserving all other components
-        database_url = urlunparse((
+        return urlunparse((
             "postgresql",
             parsed.netloc,
             parsed.path,
             parsed.params,
             parsed.query,
-            parsed.fragment
+            parsed.fragment,
         ))
-    
+
     return database_url

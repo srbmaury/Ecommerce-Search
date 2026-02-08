@@ -1,137 +1,57 @@
-"""
-Database service for search event operations.
-"""
-import pandas as pd
-from datetime import datetime, timezone, timedelta
-from sqlalchemy import desc, and_
+
+# Refactored: use event service modules
+from backend.services.event.shared import normalize_user_id
+from backend.services.event.creation import create_search_event
+from backend.services.event.query import _build_event_query
+from backend.services.event.convert import _events_to_dataframe
 from backend.utils.database import get_db_session
 from backend.models import SearchEvent
+from sqlalchemy import and_
 
-
-def create_search_event(user_id, query, product_id, event_type, group='A', position=None):
-    """Create a new search event."""
-    session = get_db_session()
-    try:
-        event = SearchEvent(
+def get_events_df(
+    since_hours=None,
+    limit=1000,
+    user_id=None,
+    event_types=None,
+):
+    with get_db_session() as session:
+        query = _build_event_query(
+            session,
             user_id=user_id,
-            query=query,
-            product_id=int(product_id) if product_id else None,
-            event_type=event_type,
-            group=group,
-            position=position,
-            timestamp=datetime.now(timezone.utc)
+            event_types=event_types,
+            since_hours=since_hours,
         )
-        session.add(event)
-        session.commit()
-        return event
-    except Exception as e:
-        session.rollback()
-        raise e
-    finally:
-        session.close()
-
-
-def get_events_df(since_hours=None, limit=None, user_id=None, event_types=None):
-    """Get search events as a pandas DataFrame (for ML compatibility)."""
-    session = get_db_session()
-    try:
-        query = session.query(SearchEvent)
-        if user_id:
-            query = query.filter(SearchEvent.user_id == str(user_id))
-        if event_types:
-            query = query.filter(SearchEvent.event_type.in_(event_types))
-        if since_hours:
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=since_hours)
-            query = query.filter(SearchEvent.timestamp >= cutoff)
-        query = query.order_by(desc(SearchEvent.timestamp))
-        if limit:
-            query = query.limit(limit)
-        events = query.all()
-        if not events:
-            return pd.DataFrame()
-        events_data = [{
-            'user_id': e.user_id,
-            'query': e.query,
-            'product_id': e.product_id,
-            'event': e.event_type,  # Use 'event' for backwards compatibility
-            'timestamp': e.timestamp,
-            'group': e.group,
-            'position': e.position
-        } for e in events]
-        df = pd.DataFrame(events_data)
-        return df
-    finally:
-        session.close()
-
+        events = query.limit(limit).all()
+        return _events_to_dataframe(events)
 
 def get_user_recent_events(user_id, event_types=None, limit=20):
-    """Get recent events for a specific user."""
-    session = get_db_session()
-    try:
-        query = session.query(SearchEvent).filter_by(user_id=user_id)
-        
-        if event_types:
-            query = query.filter(SearchEvent.event_type.in_(event_types))
-        
-        events = query.order_by(desc(SearchEvent.timestamp)).limit(limit).all()
-        return events
-    finally:
-        session.close()
-
+    with get_db_session() as session:
+        query = _build_event_query(
+            session,
+            user_id=user_id,
+            event_types=event_types,
+        )
+        return query.limit(limit).all()
 
 def get_user_interactions(user_id, product_ids):
-    """Get user interactions with specific products."""
-    session = get_db_session()
-    try:
-        events = session.query(SearchEvent).filter(
-            and_(
+    user_id = normalize_user_id(user_id)
+    if not user_id or not product_ids:
+        return []
+    with get_db_session() as session:
+        return (
+            session.query(SearchEvent)
+            .filter(
                 SearchEvent.user_id == user_id,
-                SearchEvent.product_id.in_([str(pid) for pid in product_ids])
+                SearchEvent.product_id.in_(product_ids),
             )
-        ).order_by(desc(SearchEvent.timestamp)).all()
-        return events
-    finally:
-        session.close()
-
-
-def _escape_ilike_pattern(value):
-    """
-    Escape special characters used in SQL ILIKE patterns.
-
-    Escapes %, _ and \\ so that user input cannot change the pattern
-    semantics. Use together with escape='\\' in ilike().
-    """
-    if value is None:
-        return ""
-    # First escape backslash itself, then % and _
-    value = str(value)
-    value = value.replace("\\", "\\\\")
-    value = value.replace("%", "\\%")
-    value = value.replace("_", "\\_")
-    return value
-
-
-def get_events_by_query(query_text, limit=100):
-    """Get events matching a query."""
-    session = get_db_session()
-    try:
-        escaped_query = _escape_ilike_pattern(query_text)
-        pattern = f'%{escaped_query}%'
-        events = session.query(SearchEvent).filter(
-            SearchEvent.query.ilike(pattern, escape='\\')
-        ).order_by(desc(SearchEvent.timestamp)).limit(limit).all()
-        return events
-    finally:
-        session.close()
-
+            .order_by(SearchEvent.timestamp.desc())
+            .all()
+        )
 
 def count_events_since(since_timestamp):
-    """Count events since a specific timestamp."""
-    session = get_db_session()
-    try:
-        count = session.query(SearchEvent).filter(
-            SearchEvent.timestamp >= since_timestamp
-        ).count()
-        return count
-    finally:
-        session.close()
+    with get_db_session() as session:
+        return (
+            session.query(SearchEvent)
+            .filter(SearchEvent.timestamp >= since_timestamp)
+            .count()
+        )

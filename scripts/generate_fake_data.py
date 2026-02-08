@@ -14,7 +14,7 @@ load_dotenv()
 
 from backend.utils.database import get_db_session, init_db, create_tables
 from backend.models import User, Product, SearchEvent, CartItem
-from backend.services.db_user_manager import add_to_cart
+from backend.services.cart.core import add_to_cart
 from backend.services.security import hash_password
 
 
@@ -37,29 +37,10 @@ if TOTAL_EVENTS > 100000:
     print(f"   - Database size: ~{TOTAL_EVENTS * 0.5 // 1000:.0f}MB")
     print(f"   - Consider starting with fewer events for testing")
 
-# Detect if running on PythonAnywhere (force database mode there)
-def detect_pythonanywhere():
-    """Detect if running on PythonAnywhere environment."""
-    # Check for PythonAnywhere-specific environment variables
-    if any(key in os.environ for key in ['PYTHONANYWHERE_SITE', 'PYTHONANYWHERE_DOMAIN']):
-        return True
-    # Check if path matches PythonAnywhere user directory pattern (/home/username/)
-    cwd = os.getcwd()
-    if cwd.startswith('/home/') and '/.local/' not in cwd:
-        # Check if it's a typical PythonAnywhere setup (not just any /home/ directory)
-        parts = cwd.split('/')
-        if len(parts) >= 3 and parts[2]:  # /home/username/something
-            return True
-    return False
-
-IS_PYTHONANYWHERE = detect_pythonanywhere()
 
 # Check if API is available
 def is_api_available():
     """Check if the backend API is running."""
-    if IS_PYTHONANYWHERE:
-        # On PythonAnywhere, always use direct database to avoid API issues
-        return False
     try:
         response = requests.get(f"{API_URL}/search?q=test&user_id=test", timeout=2)
         return response.ok
@@ -67,7 +48,6 @@ def is_api_available():
         return False
 
 USE_API = is_api_available()
-print(f"🌐 Environment: {'PythonAnywhere (forced DB mode)' if IS_PYTHONANYWHERE else 'Local'}")
 print(f"🌐 API Mode: {'Enabled' if USE_API else 'Disabled (using direct database)'}")
 if USE_API:
     print(f"🌐 API URL: {API_URL}")

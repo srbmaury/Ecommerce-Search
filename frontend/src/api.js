@@ -3,7 +3,7 @@ import API_BASE_URL from './config';
 
 // API utility for recommendations
 export async function fetchRecommendations(userId) {
-    const res = await fetch(`${API_BASE_URL}/api/recommendations?user_id=${userId}`);
+    const res = await fetch(`${API_BASE_URL}/recommendations?user_id=${userId}`);
     if (!res.ok) throw new Error('Failed to fetch recommendations');
     return res.json();
 }
@@ -19,6 +19,17 @@ export async function searchProducts(query, userId) {
 export async function fetchCart(userId) {
     const res = await fetch(`${API_BASE_URL}/cart?user_id=${userId}`);
     if (!res.ok) throw new Error('Failed to fetch cart');
+    return res.json();
+}
+
+// Batch cart actions
+export async function batchCart(userId, actions) {
+    const res = await fetch(`${API_BASE_URL}/cart/batch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, actions })
+    });
+    if (!res.ok) throw new Error('Failed to batch update cart');
     return res.json();
 }
 
@@ -91,7 +102,7 @@ export async function signup(username, password) {
 
 // Analytics API
 export async function fetchAnalytics() {
-    const res = await fetch(`${API_BASE_URL}/api/analytics`);
+    const res = await fetch(`${API_BASE_URL}/analytics`);
     if (!res.ok) throw new Error('Failed to fetch analytics');
     return res.json();
 }

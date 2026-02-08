@@ -1,66 +1,127 @@
 """
-Utility functions for services - use database instead.
+Product utility service.
+
+Responsibilities:
+- Provide cached access to product DataFrame
+- Time-based cache invalidation
+- Thread-safe refresh
+- Delegate writes directly to DB service
+
+NOTE:
+This is an in-memory cache suitable for a single process.
+Can be replaced with Redis without changing public API.
 """
+
 import pandas as pd
 import threading
+import logging
 from datetime import datetime, timezone
-from backend.services.db_product_service import get_products_df as _get_products_df, update_product_popularity as _update_product_popularity
+
+from backend.services.db_product_service import (
+    get_products_df as _get_products_df,
+    update_product_popularity as _update_product_popularity,
+)
 
 
-# Global cache for products with thread-safe access
-_products_cache = None
-_products_cache_time = None
-_products_cache_lock = threading.Lock()
+# ---------- CONFIG ----------
+
 CACHE_DURATION_SECONDS = 300  # 5 minutes
 
 
-def get_products_cached():
+# ---------- STATE ----------
+
+class ProductCache:
+    def __init__(self):
+        self.df = None
+        self.last_refresh = None
+        self.lock = threading.Lock()
+
+
+_state = ProductCache()
+logger = logging.getLogger("product_cache")
+
+
+# ---------- INTERNAL HELPERS ----------
+
+def _is_cache_valid(now: datetime) -> bool:
+    if _state.df is None or _state.last_refresh is None:
+        return False
+    return (
+        now - _state.last_refresh
+    ).total_seconds() <= CACHE_DURATION_SECONDS
+
+
+def _load_products() -> pd.DataFrame:
+    df = _get_products_df()
+    if df is None:
+        return pd.DataFrame()
+
+    if "created_at" in df.columns:
+        df["created_at"] = pd.to_datetime(df["created_at"])
+
+    return df
+
+
+# ---------- PUBLIC API ----------
+
+def get_products_cached() -> pd.DataFrame:
     """
-    Thread-safe lazy load products from database with time-based cache invalidation.
-    
-    Uses double-checked locking pattern to avoid race conditions while maintaining performance:
-    1. Quick check without lock (fast path for cache hits)
-    2. Acquire lock only when reload is needed
-    3. Double-check after acquiring lock (another thread may have reloaded)
-    
+    Get products DataFrame with in-memory caching.
+
+    Uses double-checked locking:
+    - Fast path for cache hits
+    - Thread-safe refresh on expiry
+
     Returns:
-        DataFrame: Products data from database, or None if error occurs
+        pandas.DataFrame (empty if DB error)
     """
-    global _products_cache, _products_cache_time
-    
-    # Quick check without lock (fast path)
-    current_time = datetime.now(timezone.utc)
-    if (_products_cache is not None and 
-        not getattr(_products_cache, "empty", False) and
-        _products_cache_time is not None and
-        (current_time - _products_cache_time).total_seconds() <= CACHE_DURATION_SECONDS):
-        return _products_cache
-    
-    # Reload with lock (slow path)
-    with _products_cache_lock:
+    now = datetime.now(timezone.utc)
+
+    # Fast path (no lock)
+    if _is_cache_valid(now):
+        return _state.df
+
+    # Slow path (refresh under lock)
+    with _state.lock:
         # Double-check after acquiring lock
-        current_time = datetime.now(timezone.utc)
-        needs_reload = (
-            _products_cache is None or 
-            getattr(_products_cache, "empty", False) or
-            _products_cache_time is None or
-            (current_time - _products_cache_time).total_seconds() > CACHE_DURATION_SECONDS
-        )
-        
-        if needs_reload:
-            _products_cache = _get_products_df()
-            _products_cache_time = current_time
-            if _products_cache is not None and not _products_cache.empty and "created_at" in _products_cache.columns:
-                _products_cache["created_at"] = pd.to_datetime(_products_cache["created_at"])
-    
-    return _products_cache
+        if not _is_cache_valid(now):
+            logger.info("Refreshing product cache")
+            try:
+                _state.df = _load_products()
+                _state.last_refresh = now
+            except Exception:
+                logger.exception("Failed to refresh product cache")
+                _state.df = pd.DataFrame()
+                _state.last_refresh = now
+
+    return _state.df
 
 
-def get_products_df():
-    """Load products DataFrame from database, returns empty DataFrame on error."""
-    return _get_products_df()
+def refresh_products_cache():
+    """
+    Force refresh of product cache.
+    Useful after bulk updates or admin operations.
+    """
+    with _state.lock:
+        logger.info("Force refreshing product cache")
+        _state.df = _load_products()
+        _state.last_refresh = datetime.now(timezone.utc)
+
+
+def get_products_df() -> pd.DataFrame:
+    """
+    Bypass cache and load products directly from DB.
+    Intended for batch jobs / ML pipelines.
+    """
+    return _load_products()
 
 
 def update_product_popularity(product_id, points):
-    """Update product popularity score by given points in database."""
+    """
+    Update product popularity score in DB.
+
+    NOTE:
+    Cache is not updated automatically.
+    Call refresh_products_cache() if consistency is required.
+    """
     return _update_product_popularity(product_id, points)
