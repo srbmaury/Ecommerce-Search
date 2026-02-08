@@ -19,7 +19,7 @@ sys.path.insert(
 
 load_dotenv()
 
-from backend.database import init_db, get_db_session
+from backend.utils.database import init_db, get_db_session
 from backend.models import Product
 
 

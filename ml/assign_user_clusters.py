@@ -19,10 +19,23 @@ def update_user_clusters(
     Returns:
         Number of users updated
     """
-    updated = 0
+    if not clusters:
+        return 0
 
+    # Fetch all relevant users in a single query to avoid N+1 queries
+    user_ids = list(clusters.keys())
+    users = (
+        session.query(User)
+        .filter(User.user_id.in_(user_ids))
+        .all()
+    )
+
+    # Map user_id (as string) to User instance for fast lookup
+    users_by_id = {str(user.user_id): user for user in users}
+
+    updated = 0
     for user_id, cluster_id in clusters.items():
-        user = session.query(User).filter_by(user_id=user_id).first()
+        user = users_by_id.get(user_id)
         if user:
             user.cluster = int(cluster_id)
             updated += 1
