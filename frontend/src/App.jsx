@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import ProductCard from './ProductCard';
 import './App.css';
 import {
@@ -47,6 +47,7 @@ export default function App() {
 	const [cartTotal, setCartTotal] = useState(0);
 	const [showCart, setShowCart] = useState(false);
 	const [cartLoading, setCartLoading] = useState(false);
+	const [cartLoadedOnce, setCartLoadedOnce] = useState(false);
 
 	/* ---------- FILTERS & SORT ---------- */
 	const [categoryFilter, setCategoryFilter] = useState('');
@@ -139,16 +140,17 @@ export default function App() {
 		currentPage * ITEMS_PER_PAGE
 	);
 
-	const fetchCartData = async () => {
+	const fetchCartData = async (isInitial = false) => {
 		if (!user) return;
-		setCartLoading(true);
+		if (isInitial) setCartLoading(true);
 		try {
 			const data = await fetchCart(user.user_id);
 			setCart(data.items || []);
 			setCartCount(data.count || 0);
 			setCartTotal(data.total || 0);
+			setCartLoadedOnce(true);
 		} finally {
-			setCartLoading(false);
+			if (isInitial) setCartLoading(false);
 		}
 	};
 
@@ -158,9 +160,56 @@ export default function App() {
 		return item ? item.quantity : 0;
 	};
 
-	// Unified cart update for ProductCard and everywhere
-	const handleCartUpdate = () => {
-		fetchCartData();
+	// Optimistic cart update for ProductCard and everywhere
+	// Debounce batching for cart API updates
+	const cartUpdateQueue = useRef([]);
+	const cartUpdateTimer = useRef(null);
+
+	const handleCartUpdate = (delta, productId) => {
+		setCart(prevCart => {
+			const idx = prevCart.findIndex(item => item.product_id === productId);
+			const allProducts = [...filteredResults, ...recent, ...recommended];
+			const product = allProducts.find(p => p.product_id === productId);
+			if (idx === -1 && delta > 0 && product) {
+				return [...prevCart, { ...product, quantity: 1 }];
+			} else if (idx !== -1) {
+				const updated = [...prevCart];
+				updated[idx] = { ...updated[idx], quantity: Math.max(0, updated[idx].quantity + delta) };
+				return updated.filter(item => item.quantity > 0);
+			}
+			return prevCart;
+		});
+
+		// Add update to queue
+		cartUpdateQueue.current.push({ delta, productId });
+		if (cartUpdateTimer.current) clearTimeout(cartUpdateTimer.current);
+		cartUpdateTimer.current = setTimeout(() => {
+			const updates = cartUpdateQueue.current;
+			cartUpdateQueue.current = [];
+			const netChanges = {};
+			updates.forEach(({ delta, productId }) => {
+				netChanges[productId] = (netChanges[productId] || 0) + delta;
+			});
+			// Build batch actions
+			const actions = [];
+			Object.entries(netChanges).forEach(([productId, netDelta]) => {
+				if (netDelta === 0) return;
+				const actionType = netDelta > 0 ? 'add' : 'remove';
+				const absDelta = Math.abs(netDelta);
+				for (let i = 0; i < absDelta; i++) {
+					actions.push({ action: actionType, product_id: productId });
+				}
+			});
+			if (actions.length === 0) return;
+			import('./api').then(({ batchCart }) => {
+				batchCart(user.user_id, actions)
+					.then(() => fetchCartData())
+					.catch(err => {
+						showToast(err.message || 'Cart update failed', 'error');
+						fetchCartData();
+					});
+			});
+		}, 1000);
 	};
 
 	useEffect(() => {
@@ -176,7 +225,7 @@ export default function App() {
 				setRecommended([]);
 			})
 			.finally(() => setRecsLoading(false));
-		fetchCartData();
+		fetchCartData(true); // initial load
 	}, [user]);
 
 	const removeFromCartHandler = async (productId) => {
@@ -269,7 +318,7 @@ export default function App() {
 				<div className="topbar-right">
 					<button
 						className="cart-btn"
-						onClick={() => { setShowCart(!showCart); if (!showCart) fetchCart(); }}
+						onClick={() => { setShowCart(!showCart); if (!showCart) fetchCart(user.user_id); }}
 					>
 						🛒 Cart ({cartCount})
 					</button>
@@ -306,7 +355,7 @@ export default function App() {
 						<h3>🛒 Your Cart ({cartCount} items)</h3>
 						<button className="cart-close" onClick={() => setShowCart(false)}>✕</button>
 					</div>
-					{cartLoading ? (
+					{cartLoading && !cartLoadedOnce ? (
 						<div className="loading">Loading cart...</div>
 					) : cart.length === 0 ? (
 						<div className="empty">Your cart is empty.</div>
@@ -322,7 +371,7 @@ export default function App() {
 										</div>
 										<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
 											<button
-												onClick={() => removeFromCartHandler(item.product_id)}
+												onClick={() => handleCartUpdate(-1, item.product_id)}
 												style={{
 													width: '28px',
 													height: '28px',
@@ -343,10 +392,7 @@ export default function App() {
 												{item.quantity}
 											</span>
 											<button
-												onClick={async () => {
-													await addToCart(user.user_id, item.product_id, '');
-													fetchCart();
-												}}
+												onClick={() => handleCartUpdate(1, item.product_id)}
 												style={{
 													width: '28px',
 													height: '28px',
@@ -397,72 +443,7 @@ export default function App() {
 						</div>
 						<p className="modal-description">{selectedProduct.description}</p>
 						<div className="modal-actions">
-							{(() => {
-								const cartQty = getCartQuantity(selectedProduct.product_id);
-								if (cartQty === 0) {
-									return (
-										<button
-											className="modal-add-btn"
-											onClick={async () => {
-												await addToCart(user.user_id, selectedProduct.product_id, '');
-												fetchCart();
-												showToast('Added to cart!', 'success');
-											}}
-										>
-											Add to Cart
-										</button>
-									);
-								}
-								return (
-									<div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-										<button
-											onClick={async () => {
-												await removeFromCart(user.user_id, selectedProduct.product_id);
-												fetchCartData();
-											}}
-											style={{
-												width: '40px',
-												height: '40px',
-												borderRadius: '50%',
-												border: '2px solid #f44336',
-												background: 'white',
-												color: '#f44336',
-												fontSize: '20px',
-												cursor: 'pointer',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center'
-											}}
-										>
-											−
-										</button>
-										<span style={{ fontSize: '20px', fontWeight: 'bold', minWidth: '40px', textAlign: 'center' }}>
-											{cartQty}
-										</span>
-										<button
-											onClick={async () => {
-												await addToCart(user.user_id, selectedProduct.product_id, '');
-												fetchCart();
-											}}
-											style={{
-												width: '40px',
-												height: '40px',
-												borderRadius: '50%',
-												border: '2px solid #4CAF50',
-												background: '#4CAF50',
-												color: 'white',
-												fontSize: '20px',
-												cursor: 'pointer',
-												display: 'flex',
-												alignItems: 'center',
-												justifyContent: 'center'
-											}}
-										>
-											+
-										</button>
-									</div>
-								);
-							})()}
+							{/* Cart controls removed from product modal as requested */}
 						</div>
 					</div>
 				</div>

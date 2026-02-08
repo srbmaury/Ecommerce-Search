@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { addToCart, removeFromCart, logEvent } from './api';
+import { logEvent } from './api';
 
 export default function ProductCard({
     product,
@@ -10,63 +9,29 @@ export default function ProductCard({
     onProductClick,
     cartQuantity = 0
 }) {
-    const [added, setAdded] = useState(cartQuantity > 0);
-    const [quantity, setQuantity] = useState(cartQuantity);
-
-    // Sync local state with prop changes (when cart is updated externally)
-    useEffect(() => {
-        setQuantity(cartQuantity);
-        setAdded(cartQuantity > 0);
-    }, [cartQuantity]);
-
-    const handleAddToCart = async (e) => {
+    // Cart controls are now fully controlled by cartQuantity prop
+    const handleAddToCart = (e) => {
         e.stopPropagation();
-        let newQuantity;
-        if (!added) {
-            setAdded(true);
-            setQuantity(1);
-            newQuantity = 1;
-        } else {
-            setQuantity(prev => {
-                newQuantity = prev + 1;
-                return newQuantity;
-            });
-        }
-        if (onCartUpdate) onCartUpdate(1);
-        try {
-            await addToCart(userId, product.product_id, query || '');
-        } catch (err) {
-            setQuantity(prev => (prev > 1 ? prev - 1 : 0));
-            if (newQuantity <= 1) setAdded(false);
-            alert(err.message || 'Failed to add to cart');
-        }
+        if (onCartUpdate) onCartUpdate(1, product.product_id);
     };
 
-    const handleRemoveFromCart = async (e) => {
+    const handleRemoveFromCart = (e) => {
         e.stopPropagation();
-        let newQuantity;
-        setQuantity(prev => {
-            newQuantity = prev - 1;
-            return Math.max(0, newQuantity);
-        });
-        if (quantity <= 1) {
-            setAdded(false);
-        }
-        if (onCartUpdate) onCartUpdate(-1);
-        try {
-            await removeFromCart(userId, product.product_id);
-        } catch {
-            // Optionally revert UI or show error
-        }
+        if (onCartUpdate) onCartUpdate(-1, product.product_id);
     };
 
     const onClick = async (e) => {
         if (e.target.tagName === 'BUTTON') return;
         if (onProductClick) onProductClick(product);
+        console.log('ProductCard clicked:', { isRecommendation, productId: product.product_id, userId, query });
         if (!isRecommendation) {
             try {
+                console.log('Logging click event for product:', product.product_id);
                 await logEvent('click', product.product_id, query, userId);
-            } catch { }
+                console.log('Click event logged successfully');
+            } catch (err) {
+                console.error('Failed to log click event:', err);
+            }
         }
     };
 
@@ -75,7 +40,7 @@ export default function ProductCard({
             <div className="pc-title">{product.title}</div>
             <div className="pc-price">${product.price?.toFixed(2)}</div>
             <div className="pc-meta">{product.category} • Rating: {product.rating}</div>
-            {!added ? (
+            {cartQuantity === 0 ? (
                 <button className="pc-btn" onClick={handleAddToCart}>
                     Add to Cart
                 </button>
@@ -110,7 +75,7 @@ export default function ProductCard({
                         fontWeight: 'bold',
                         minWidth: '30px',
                         textAlign: 'center'
-                    }}>{quantity}</span>
+                    }}>{cartQuantity}</span>
                     <button
                         onClick={handleAddToCart}
                         style={{

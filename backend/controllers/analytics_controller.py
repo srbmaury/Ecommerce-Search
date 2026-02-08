@@ -1,99 +1,157 @@
-import os
-import json
 import collections
 import pandas as pd
-import numpy as np
 from flask import jsonify
+from sqlalchemy import func
+
 from backend.services.db_event_service import get_events_df
-from backend.services.db_user_manager import get_db_session
+from backend.utils.database import get_db_session
 from backend.models import User
-from backend.services.analytics_html import build_html
+
+
+EVENT_CLICK = "click"
+EVENT_CART = "add_to_cart"
+
+# ---------- CORE COMPUTATION ----------
+
+def _compute_analytics():
+    import logging
+    logger = logging.getLogger("analytics_debug")
+    events = get_events_df()
+    logger.info(f"Fetched events: {len(events)} rows, columns: {list(events.columns)}")
+    if events.empty:
+        logger.warning("No events found in database.")
+        return None, None, None
+
+    summary = {}
+    try:
+        grouped = events.groupby("group")
+        logger.info(f"Groups found: {list(grouped.groups.keys())}")
+        for group, gdf in grouped:
+            searches = gdf["query"].notna().sum()
+            clicks = (gdf["event"] == EVENT_CLICK).sum()
+            carts = (gdf["event"] == EVENT_CART).sum()
+            logger.info(f"Group {group}: users={gdf['user_id'].nunique()}, searches={searches}, clicks={clicks}, carts={carts}")
+            summary[group] = {
+                "users": int(gdf["user_id"].nunique()),
+                "searches": int(searches),
+                "clicks": int(clicks),
+                "add_to_cart": int(carts),
+                "CTR": round(clicks / searches, 3) if searches else 0.0,
+                "Conversion": round(carts / searches, 3) if searches else 0.0,
+            }
+    except Exception as e:
+        logger.exception(f"Error during analytics computation: {e}")
+        raise
+
+    try:
+        cluster_counts = get_cluster_counts()
+        logger.info(f"Cluster counts: {cluster_counts}")
+    except Exception as e:
+        logger.exception(f"Error in get_cluster_counts: {e}")
+        raise
+
+    try:
+        top_queries = events["query"].value_counts().head(10)
+        logger.info(f"Top queries: {top_queries}")
+    except Exception as e:
+        logger.exception(f"Error in top_queries: {e}")
+        raise
+
+    return summary, cluster_counts, top_queries
+    
+def get_cluster_counts():
+    session = get_db_session()
+    try:
+        rows = (
+            session.query(
+                func.coalesce(User.cluster, -1),
+                func.count(),
+            )
+            .group_by(User.cluster)
+            .all()
+        )
+        return collections.Counter({int(cluster): int(count) for cluster, count in rows})
+    finally:
+        session.close()
+
+
+# ---------- Analytics Computation ----------
+
+    summary = {}
+    grouped = events.groupby("group")
+    for group, gdf in grouped:
+        try:
+            searches = gdf["query"].notna().sum()
+            clicks = (gdf["event"] == EVENT_CLICK).sum()
+            carts = (gdf["event"] == EVENT_CART).sum()
+            logger.info(f"Group {group}: users={gdf['user_id'].nunique()}, searches={searches}, clicks={clicks}, carts={carts}")
+            summary[group] = {
+                "users": int(gdf["user_id"].nunique()),
+                "searches": int(searches),
+                "clicks": int(clicks),
+                "add_to_cart": int(carts),
+                "CTR": round(clicks / searches, 3) if searches else 0.0,
+                "Conversion": round(carts / searches, 3) if searches else 0.0,
+            }
+        except Exception as e:
+            logger.exception(f"Error processing group {group}: {e}")
+            raise
+
+    try:
+        cluster_counts = get_cluster_counts()
+        logger.info(f"Cluster counts: {cluster_counts}")
+    except Exception as e:
+        logger.exception(f"Error in get_cluster_counts: {e}")
+        raise
+
+    try:
+        top_queries = events["query"].value_counts().head(10)
+        logger.info(f"Top queries: {top_queries}")
+    except Exception as e:
+        logger.exception(f"Error in top_queries: {e}")
+        raise
+
+    return summary, cluster_counts, top_queries
+
+
+# ---------- HTML ENDPOINT ----------
 
 def get_analytics_data():
     try:
-        events = get_events_df()
-        if events.empty:
+        summary, cluster_counts, top_queries = _compute_analytics()
+        if summary is None:
             return jsonify({"error": "Analytics data not available"}), 404
     except Exception:
         return jsonify({"error": "Failed to read analytics data"}), 500
-
-
-    summary = {}
-    for group in events["group"].unique():
-        gdf = events[events["group"] == group]
-        searches = gdf["query"].notnull().sum()
-        clicks = (gdf["event"] == "click").sum()
-        carts = (gdf["event"] == "add_to_cart").sum()
-        users = gdf["user_id"].nunique()
-
-        summary[group] = {
-            "users": users,
-            "searches": searches,
-            "clicks": clicks,
-            "add_to_cart": carts,
-            "CTR": round(clicks / searches, 3) if searches else 0,
-            "Conversion": round(carts / searches, 3) if searches else 0,
-        }
-
-    # Get cluster counts from database
-    session = get_db_session()
-    try:
-        users = session.query(User).all()
-        cluster_counts = collections.Counter(
-            u.cluster if u.cluster is not None else -1 for u in users
-        )
-    finally:
-        session.close()
-
-    top_queries = events["query"].value_counts().head(10)
 
     return build_html(summary, cluster_counts, top_queries)
 
+    return summary
 
-# New: API endpoint for JSON analytics data
+
+def get_top_queries(events, limit=10):
+    return {
+        str(query): int(count)
+        for query, count in events["query"].value_counts().head(limit).items()
+    }
+
+
+# ---------- API Endpoints ----------
+
 def get_analytics_json():
     try:
-        events = get_events_df()
-        if events.empty:
+        summary, cluster_counts, top_queries = _compute_analytics()
+        if summary is None:
             return jsonify({"error": "Analytics data not available"}), 404
     except Exception:
         return jsonify({"error": "Failed to read analytics data"}), 500
 
-    summary = {}
-    for group in events["group"].unique():
-        gdf = events[events["group"] == group]
-        searches = int(gdf["query"].notnull().sum())
-        clicks = int((gdf["event"] == "click").sum())
-        carts = int((gdf["event"] == "add_to_cart").sum())
-        users = int(gdf["user_id"].nunique())
-
-        summary[group] = {
-            "users": users,
-            "searches": searches,
-            "clicks": clicks,
-            "add_to_cart": carts,
-            "CTR": float(round(clicks / searches, 3)) if searches else 0.0,
-            "Conversion": float(round(carts / searches, 3)) if searches else 0.0,
-        }
-
-    session = get_db_session()
-    try:
-        users = session.query(User).all()
-        cluster_counts = collections.Counter(
-            int(u.cluster) if u.cluster is not None else -1 for u in users
-        )
-    finally:
-        session.close()
-
-    # Convert top_queries index and values to native Python types
-    top_queries_series = events["query"].value_counts().head(10)
-    top_queries = {str(k): int(v) for k, v in top_queries_series.items()}
-
-    # Convert cluster_counts keys to str for JSON
-    cluster_counts_json = {str(k): int(v) for k, v in dict(cluster_counts).items()}
-
     return jsonify({
         "summary": summary,
-        "cluster_counts": cluster_counts_json,
-        "top_queries": top_queries,
+        "cluster_counts": {
+            str(k): int(v) for k, v in cluster_counts.items()
+        },
+        "top_queries": {
+            str(k): int(v) for k, v in top_queries.items()
+        },
     })

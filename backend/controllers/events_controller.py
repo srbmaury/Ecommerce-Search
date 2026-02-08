@@ -1,4 +1,5 @@
-from datetime import datetime
+import logging
+logger = logging.getLogger("event_logger")
 
 from backend.utils.sanitize import sanitize_user_id
 from backend.services.db_user_manager import get_user_by_id
@@ -7,42 +8,66 @@ from backend.services.db_product_service import update_product_popularity
 from backend.services.retrain_trigger import record_event
 
 
-def log_event_controller(data):
-    raw_user_id = data.get("user_id", "")
+DEFAULT_GROUP = "A"
+POPULARITY_EVENTS = {"click"}
+RETRAIN_EVENTS = {"click", "add_to_cart"}
+
+
+# ---------- Helpers ----------
+
+def error_response(message, status=400):
+    return {"error": message}, status
+
+
+def resolve_user_context(raw_user_id):
+    """
+    Returns (user_id, group)
+    Anonymous users are allowed.
+    """
+    if not raw_user_id:
+        return "", DEFAULT_GROUP
+
     user_id = sanitize_user_id(raw_user_id)
+    if not user_id:
+        return None, None
 
-    if raw_user_id and user_id is None:
-        return {"error": "invalid user_id"}, 400
-
-    if user_id is None:
-        user_id = ""
-
-    group = "A"
     try:
         user = get_user_by_id(user_id)
-        if user:
-            group = user.group or "A"
+        group = user.group if user and user.group else DEFAULT_GROUP
     except Exception:
-        # If user lookup fails, continue with default group A
-        pass
+        group = DEFAULT_GROUP
 
+    return user_id, group
+
+
+# ---------- Controller ----------
+
+def log_event_controller(data):
+    raw_user_id = data.get("user_id", "")
     event_type = data.get("event", "")
     product_id = data.get("product_id", "")
     query = data.get("query", "")
+    logger.info(f"Received event data: {data}")
 
-    # Log the event to database
+    user_id, group = resolve_user_context(raw_user_id)
+    if user_id is None:
+            logger.warning(f"Invalid user_id received: {raw_user_id}")
+            return error_response("invalid user_id")
+
+    # Best-effort analytics logging
     try:
-        create_search_event(user_id, query, product_id, event_type, group)
-    except Exception:
-        # If event logging fails, continue processing (non-critical)
-        pass
+            logger.info(f"Creating event: user_id={user_id}, query={query}, product_id={product_id}, event_type={event_type}, group={group}")
+            create_search_event(user_id=user_id, query=query, product_id=product_id, event_type=event_type, group=group)
+            logger.info("Event created successfully.")
+    except Exception as e:
+            logger.error(f"Event logging failed: {e}")
 
-    # Popularity rule
-    if event_type == "click" and product_id:
+    # Popularity update
+    if event_type in POPULARITY_EVENTS and product_id:
         update_product_popularity(product_id, 1)
 
-    # Track event for retrain triggers
-    if event_type in ("click", "add_to_cart"):
+    # Retrain trigger
+    if event_type in RETRAIN_EVENTS:
         record_event()
 
     return {"status": "logged"}, 200
