@@ -16,7 +16,11 @@ def build_vectorizer(
         vectorizer: fitted TfidfVectorizer
         matrix: TF-IDF feature matrix
     """
-    if not texts:
+    # Normalize to a concrete sequence so emptiness checks and reuse are safe
+    if not isinstance(texts, (list, tuple)):
+        texts = list(texts)
+
+    if len(texts) == 0:
         raise ValueError("Input texts must be a non-empty iterable of strings")
 
     vectorizer = TfidfVectorizer(

@@ -43,7 +43,7 @@ def build_user_profiles() -> Dict[str, dict]:
 
     merged = events.merge(products, on="product_id", how="inner")
 
-    interactions = merged[merged["event"].isin(EVENT_WEIGHTS)]
+    interactions = merged[merged["event"].isin(EVENT_WEIGHTS)].copy()
     if interactions.empty:
         logger.warning("No click or add_to_cart interactions found")
         return {}
@@ -71,14 +71,13 @@ def build_user_profiles() -> Dict[str, dict]:
     # ------------------------------------------------------------------
     # Price preference (weighted average)
     # ------------------------------------------------------------------
-    price_pref = (
+    price_sums = (
         interactions
         .assign(weighted_price=lambda df: df["price"] * df["weight"])
-        .groupby("user_id")
-        .apply(
-            lambda g: g["weighted_price"].sum() / g["weight"].sum()
-        )
+        .groupby("user_id")[["weighted_price", "weight"]]
+        .sum()
     )
+    price_pref = price_sums["weighted_price"] / price_sums["weight"]
 
     # ------------------------------------------------------------------
     # Assemble profiles

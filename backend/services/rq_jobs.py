@@ -110,13 +110,13 @@ def enqueue_retrain_and_cluster():
 # ---------- CLI ----------
 
 def main():
-    """CLI entry point - run training directly without RQ."""
+    """CLI entry point - run training directly or enqueue via RQ."""
     import sys
     
     if len(sys.argv) > 1 and sys.argv[1] == "--enqueue":
         # Enqueue job to RQ (requires worker to be running)
-        # Note: This must be called from a separate script, not as __main__
-        print("To enqueue jobs, use: python -c \"from backend.services.rq_jobs import enqueue_retrain_and_cluster; enqueue_retrain_and_cluster()\"")
+        job = enqueue_retrain_and_cluster()
+        print(f"Enqueued retrain + cluster job {job.id} on queue '{QUEUE_NAME}' with status '{job.get_status()}'")
         return
     
     # Run training directly (no RQ)
