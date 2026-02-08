@@ -1,5 +1,4 @@
 import logging
-logger = logging.getLogger("event_logger")
 
 from backend.utils.sanitize import sanitize_user_id
 from backend.services.db_user_manager import get_user_by_id
@@ -7,6 +6,7 @@ from backend.services.db_event_service import create_search_event
 from backend.services.db_product_service import update_product_popularity
 from backend.services.retrain_trigger import record_event
 
+logger = logging.getLogger("event_logger")
 
 DEFAULT_GROUP = "A"
 POPULARITY_EVENTS = {"click"}
@@ -47,7 +47,6 @@ def log_event_controller(data):
     event_type = data.get("event", "")
     product_id = data.get("product_id", "")
     query = data.get("query", "")
-    logger.info(f"Received event data: {data}")
 
     user_id, group = resolve_user_context(raw_user_id)
     if user_id is None:
@@ -56,7 +55,6 @@ def log_event_controller(data):
 
     # Best-effort analytics logging
     try:
-            logger.info(f"Creating event: user_id={user_id}, query={query}, product_id={product_id}, event_type={event_type}, group={group}")
             create_search_event(user_id=user_id, query=query, product_id=product_id, event_type=event_type, group=group)
             logger.info("Event created successfully.")
     except Exception as e:

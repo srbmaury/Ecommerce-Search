@@ -1,27 +1,52 @@
+from typing import Sequence
+import numpy as np
 from sklearn.metrics import roc_auc_score
 
-def evaluate(y_true, y_pred):
-    """
-    Compute the ROC-AUC (Receiver Operating Characteristic - Area Under the Curve)
-    for a set of predictions.
 
-    This is a thin wrapper around ``sklearn.metrics.roc_auc_score`` and should be
-    used when you want a single scalar measure of how well the predicted scores
-    separate the positive and negative classes.
+def evaluate(
+    y_true: Sequence,
+    y_pred: Sequence,
+    *,
+    multi_class: str = "ovr",
+    average: str = "macro"
+) -> float:
+    """
+    Compute the ROC-AUC score for model predictions.
+
+    This function centralizes ROC-AUC evaluation logic so behavior remains
+    consistent across experiments and pipelines.
 
     Parameters
     ----------
     y_true : array-like of shape (n_samples,)
-        Ground truth (correct) target labels or binary indicators.
-    y_pred : array-like of shape (n_samples,) or (n_samples, n_classes)
-        Predicted scores, probabilities, or decision function values as
-        expected by ``roc_auc_score`` (e.g., probability of the positive class
-        in the binary case).
+        Ground-truth binary or multiclass labels.
+    y_pred : array-like
+        Predicted probabilities or scores. For multiclass problems,
+        expected shape is (n_samples, n_classes).
+    multi_class : {"ovr", "ovo"}, default="ovr"
+        Strategy for multiclass ROC-AUC computation.
+    average : {"macro", "weighted", "micro"}, default="macro"
+        Averaging strategy for multiclass ROC-AUC.
 
     Returns
     -------
     float
-        ROC-AUC score, where 1.0 indicates perfect separation and 0.5 indicates
-        performance no better than random guessing for balanced binary classes.
+        ROC-AUC score.
+
+    Raises
+    ------
+    ValueError
+        If ROC-AUC cannot be computed (e.g., only one class present).
     """
-    return roc_auc_score(y_true, y_pred)
+    y_true = np.asarray(y_true)
+    y_pred = np.asarray(y_pred)
+
+    if len(np.unique(y_true)) < 2:
+        raise ValueError("ROC-AUC is undefined when only one class is present.")
+
+    return roc_auc_score(
+        y_true,
+        y_pred,
+        multi_class=multi_class if y_pred.ndim > 1 else "raise",
+        average=average if y_pred.ndim > 1 else None,
+    )

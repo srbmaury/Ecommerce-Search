@@ -1,35 +1,78 @@
+import logging
+from typing import Dict
+
 from ml.user_clustering import cluster_users
-from backend.services.db_user_manager import get_db_session
+from backend.utils.database import get_db_session
 from backend.models import User
 
-def assign_clusters_to_users(n_clusters=3):
-    """Assign clusters to users using database data."""
-    print("🧠 Clustering users from database...")
+
+logger = logging.getLogger(__name__)
+
+
+def update_user_clusters(
+    clusters: Dict[str, int],
+    session
+) -> int:
+    """
+    Update user cluster assignments in the database.
+
+    Returns:
+        Number of users updated
+    """
+    updated = 0
+
+    for user_id, cluster_id in clusters.items():
+        user = session.query(User).filter_by(user_id=user_id).first()
+        if user:
+            user.cluster = int(cluster_id)
+            updated += 1
+
+    return updated
+
+
+def assign_clusters_to_users(n_clusters: int = 3) -> int:
+    """
+    Run user clustering and persist cluster assignments.
+
+    Returns:
+        Number of users updated
+    """
+    logger.info("Clustering users from database (n_clusters=%d)", n_clusters)
+
     clusters = cluster_users(n_clusters)
-    
+
     if not clusters:
-        print("⚠️  No users to cluster. Generate some events first.")
-        return
-    
-    print(f"✓ Clustered {len(clusters)} users")
-    print("💾 Updating cluster assignments in database...")
-    
+        logger.warning("No users to cluster. Generate some events first.")
+        return 0
+
+    logger.info("Clustered %d users", len(clusters))
+    logger.info("Updating cluster assignments in database")
+
     session = get_db_session()
     try:
-        updated = 0
-        for user_id, cluster_id in clusters.items():
-            user = session.query(User).filter_by(user_id=user_id).first()
-            if user:
-                user.cluster = int(cluster_id)
-                updated += 1
-        
+        updated = update_user_clusters(clusters, session)
         session.commit()
-        print(f"✅ Updated {updated} user clusters in database")
-    except Exception as e:
+
+        logger.info("Updated %d user clusters in database", updated)
+        return updated
+
+    except Exception:
         session.rollback()
-        print(f"❌ Error updating clusters: {e}")
+        logger.exception("Error updating user clusters")
+        raise
+
     finally:
         session.close()
 
-if __name__ == "__main__":
+
+def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    )
+
     assign_clusters_to_users()
+
+
+if __name__ == "__main__":
+    main()

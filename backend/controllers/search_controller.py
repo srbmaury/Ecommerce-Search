@@ -1,7 +1,6 @@
 import time
-import logging
 
-from backend.utils.search import search_products, search_products
+from backend.utils.search import search_products
 from backend.services.db_user_manager import get_user_by_id
 from backend.utils.sanitize import sanitize_user_id
 from backend.utils.intent import detect_intent
@@ -62,7 +61,6 @@ def apply_sort(products, sort_key):
 # ---------- Controller ----------
 
 def search_controller(query, raw_user_id):
-    logger = logging.getLogger("api_response_time")
     timings = {}
     t0 = time.perf_counter()
 
@@ -135,7 +133,6 @@ def search_controller(query, raw_user_id):
         detected_intents.append("price_filter")
 
     timings["total"] = (time.perf_counter() - t0) * 1000
-    logger.info(f"SEARCH_TIMINGS {timings}")
 
     return {
         "products": products,

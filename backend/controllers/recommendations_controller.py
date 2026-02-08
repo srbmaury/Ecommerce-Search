@@ -74,16 +74,11 @@ def serialize_product_dates(products):
 
 def get_recent_product_ids(user_id, limit=5):
     try:
-        print(f"DEBUG get_recent_product_ids: user_id={user_id}, event_types={EVENT_TYPES}")
         df = get_events_df(
             user_id=user_id,
             event_types=EVENT_TYPES,
             limit=20,
         )
-        print(f"DEBUG get_recent_product_ids: df.empty={df.empty}, df.shape={df.shape if not df.empty else 'N/A'}")
-        if not df.empty:
-            print(f"DEBUG get_recent_product_ids: df.columns={list(df.columns)}")
-            print(f"DEBUG get_recent_product_ids: df.head()=\n{df.head()}")
         if df.empty:
             return []
 
@@ -95,7 +90,6 @@ def get_recent_product_ids(user_id, limit=5):
             .tolist()[:limit]
         )
     except Exception as e:
-        print(f"DEBUG get_recent_product_ids: EXCEPTION {e}")
         return []
 
 
@@ -213,7 +207,6 @@ def recommendations_controller(user_id):
         })
         per_category[product.category] = per_category.get(product.category, 0) + 1
 
-    print(f"DEBUG: user_id={user_id}, recent_ids={recent_ids}, recent_products_count={len(recent_products)}")
     result = {
         "recent": recent_products,
         "similar": results,
