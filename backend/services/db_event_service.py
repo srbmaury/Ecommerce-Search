@@ -1,5 +1,3 @@
-
-# Refactored: use event service modules
 from backend.services.event.shared import normalize_user_id
 from backend.services.event.creation import create_search_event
 from backend.services.event.query import _build_event_query

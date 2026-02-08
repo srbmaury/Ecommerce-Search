@@ -1,44 +1,96 @@
+import logging
+from typing import Dict
+
 import pandas as pd
+
 from backend.services.db_event_service import get_events_df
 from backend.services.db_product_service import get_products_df
 
-def build_user_profiles():
-    """Build user profiles from database data."""
+
+logger = logging.getLogger(__name__)
+
+
+EVENT_WEIGHTS = {
+    "click": 1,
+    "add_to_cart": 2,
+}
+
+
+def build_user_profiles() -> Dict[str, dict]:
+    """
+    Build user preference profiles from interaction data.
+
+    Profile structure:
+    {
+        user_id: {
+            "category_pref": {category: normalized_weight},
+            "avg_price": weighted_average_price
+        }
+    }
+    """
     events = get_events_df()
     products = get_products_df()
-    
+
     if events.empty or products.empty:
+        logger.warning("Events or products table is empty")
         return {}
-    
-    # Ensure product_id is string for merging
-    events['product_id'] = events['product_id'].astype(str)
-    products['product_id'] = products['product_id'].astype(str)
 
-    merged = events.merge(products, on="product_id")
+    events = events.copy()
+    products = products.copy()
 
-    # Include clicks and add_to_cart for preferences (weighted)
-    # add_to_cart has higher weight than click
-    interactions = merged[merged.event.isin(["click", "add_to_cart"])]
+    events["product_id"] = events["product_id"].astype(str)
+    products["product_id"] = products["product_id"].astype(str)
 
+    merged = events.merge(products, on="product_id", how="inner")
+
+    interactions = merged[merged["event"].isin(EVENT_WEIGHTS)].copy()
+    if interactions.empty:
+        logger.warning("No click or add_to_cart interactions found")
+        return {}
+
+    # Apply event weights
+    interactions["weight"] = interactions["event"].map(EVENT_WEIGHTS)
+
+    # ------------------------------------------------------------------
+    # Category preferences (weighted, normalized)
+    # ------------------------------------------------------------------
+    category_weights = (
+        interactions
+        .groupby(["user_id", "category"])["weight"]
+        .sum()
+    )
+
+    category_totals = category_weights.groupby(level=0).sum()
+
+    category_pref = (
+        category_weights
+        .div(category_totals, level=0)
+        .reset_index()
+    )
+
+    # ------------------------------------------------------------------
+    # Price preference (weighted average)
+    # ------------------------------------------------------------------
+    price_sums = (
+        interactions
+        .assign(weighted_price=lambda df: df["price"] * df["weight"])
+        .groupby("user_id")[["weighted_price", "weight"]]
+        .sum()
+    )
+    price_pref = price_sums["weighted_price"] / price_sums["weight"]
+
+    # ------------------------------------------------------------------
+    # Assemble profiles
+    # ------------------------------------------------------------------
     profiles = {}
 
-    for user_id, group in interactions.groupby("user_id"):
-        # Weight: click=1, add_to_cart=2 for category preference
-        weights = group["event"].map({"click": 1, "add_to_cart": 2}).fillna(0)
-
-        # Weighted category preferences
-        category_counts = {}
-        for cat, weight in zip(group["category"], weights):
-            category_counts[cat] = category_counts.get(cat, 0) + weight
-        total_weight = sum(category_counts.values())
-        category_pref = {k: v / total_weight for k, v in category_counts.items()} if total_weight > 0 else {}
-
-        # Weighted average price (add_to_cart counts more)
-        price_pref = (group["price"] * weights).sum() / weights.sum() if weights.sum() > 0 else group["price"].mean()
-
+    for user_id, user_cats in category_pref.groupby("user_id"):
         profiles[user_id] = {
-            "category_pref": category_pref,
-            "avg_price": price_pref
+            "category_pref": dict(
+                zip(user_cats["category"], user_cats["weight"])
+            ),
+            "avg_price": float(price_pref.get(user_id, 0.0)),
         }
 
+    logger.info("Built profiles for %d users", len(profiles))
     return profiles

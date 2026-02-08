@@ -1,3 +1,4 @@
+import logging
 import collections
 import pandas as pd
 from flask import jsonify
@@ -7,6 +8,7 @@ from backend.services.db_event_service import get_events_df
 from backend.utils.database import get_db_session
 from backend.models import User
 
+logger = logging.getLogger("analytics_debug")
 
 EVENT_CLICK = "click"
 EVENT_CART = "add_to_cart"
@@ -14,10 +16,7 @@ EVENT_CART = "add_to_cart"
 # ---------- CORE COMPUTATION ----------
 
 def _compute_analytics():
-    import logging
-    logger = logging.getLogger("analytics_debug")
     events = get_events_df()
-    logger.info(f"Fetched events: {len(events)} rows, columns: {list(events.columns)}")
     if events.empty:
         logger.warning("No events found in database.")
         return None, None, None
@@ -25,12 +24,10 @@ def _compute_analytics():
     summary = {}
     try:
         grouped = events.groupby("group")
-        logger.info(f"Groups found: {list(grouped.groups.keys())}")
         for group, gdf in grouped:
             searches = gdf["query"].notna().sum()
             clicks = (gdf["event"] == EVENT_CLICK).sum()
             carts = (gdf["event"] == EVENT_CART).sum()
-            logger.info(f"Group {group}: users={gdf['user_id'].nunique()}, searches={searches}, clicks={clicks}, carts={carts}")
             summary[group] = {
                 "users": int(gdf["user_id"].nunique()),
                 "searches": int(searches),
@@ -84,7 +81,6 @@ def get_cluster_counts():
             searches = gdf["query"].notna().sum()
             clicks = (gdf["event"] == EVENT_CLICK).sum()
             carts = (gdf["event"] == EVENT_CART).sum()
-            logger.info(f"Group {group}: users={gdf['user_id'].nunique()}, searches={searches}, clicks={clicks}, carts={carts}")
             summary[group] = {
                 "users": int(gdf["user_id"].nunique()),
                 "searches": int(searches),

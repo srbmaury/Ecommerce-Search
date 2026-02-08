@@ -1,55 +1,142 @@
-import pandas as pd
+import logging
+from typing import Dict, Tuple, List
+
 import numpy as np
 from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+
 from backend.services.db_event_service import get_events_df
 from backend.services.db_product_service import get_products_df
 
-def extract_user_features():
-    """Extract user features from database."""
+
+logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------
+# Feature extraction
+# ---------------------------------------------------------------------
+
+def extract_user_features() -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """
+    Extract per-user behavioral features for clustering.
+
+    Features:
+    - Normalized category click distribution
+    - Average clicked product price
+
+    Returns:
+        user_ids: array of user IDs
+        X: feature matrix (n_users, n_features)
+        categories: category ordering used for features
+    """
     events = get_events_df()
     products = get_products_df()
-    
+
     if events.empty or products.empty:
-        return np.array([]), np.array([]), np.array([])
-    
-    # Ensure product_id is string for merging
-    events['product_id'] = events['product_id'].astype(str)
-    products['product_id'] = products['product_id'].astype(str)
-    
+        logger.warning("Events or products table is empty")
+        return np.array([]), np.array([]), []
+
+    events = events.copy()
+    products = products.copy()
+
+    events["product_id"] = events["product_id"].astype(str)
+    products["product_id"] = products["product_id"].astype(str)
+
     merged = events.merge(products, on="product_id", how="left")
-    clicks = merged[merged.event == "click"]
-    
+
+    clicks = merged[merged["event"] == "click"]
     if clicks.empty:
-        return np.array([]), np.array([]), np.array([])
-    
-    user_ids = clicks["user_id"].unique()
-    categories = products["category"].unique()
-    features = []
-    
-    for user_id in user_ids:
-        user_clicks = clicks[clicks["user_id"] == user_id]
-        cat_counts = user_clicks["category"].value_counts(normalize=True).reindex(categories, fill_value=0).values
-        avg_price = user_clicks["price"].mean() if not user_clicks.empty else 0
-        features.append(np.concatenate([cat_counts, [avg_price]]))
-    
-    return user_ids, np.array(features), categories
+        logger.warning("No click events found")
+        return np.array([]), np.array([]), []
 
-def cluster_users(n_clusters=3):
-    """Cluster users based on their behavior from database."""
-    user_ids, X, categories = extract_user_features()
-    
+    categories = sorted(products["category"].dropna().unique())
+
+    # --- Category distribution (vectorized) ---
+    category_dist = (
+        clicks.groupby(["user_id", "category"])
+        .size()
+        .unstack(fill_value=0)
+        .reindex(columns=categories, fill_value=0)
+    )
+
+    # Normalize per user
+    category_dist = category_dist.div(category_dist.sum(axis=1), axis=0)
+
+    # --- Average price feature ---
+    avg_price = clicks.groupby("user_id")["price"].mean()
+
+    # --- Combine features ---
+    feature_df = category_dist.copy()
+    feature_df["avg_price"] = avg_price
+
+    feature_df = feature_df.fillna(0)
+
+    user_ids = feature_df.index.to_numpy()
+    X = feature_df.to_numpy(dtype=np.float32)
+
+    logger.info(
+        "Extracted features for %d users (%d features)",
+        len(user_ids),
+        X.shape[1],
+    )
+
+    return user_ids, X, categories
+
+
+# ---------------------------------------------------------------------
+# Clustering
+# ---------------------------------------------------------------------
+
+def cluster_users(n_clusters: int = 3) -> Dict[str, int]:
+    """
+    Cluster users based on behavioral features.
+
+    Returns:
+        Dict[user_id -> cluster_id]
+    """
+    user_ids, X, _ = extract_user_features()
+
     if len(user_ids) == 0:
+        logger.warning("No users available for clustering")
         return {}
-    
-    if len(user_ids) < n_clusters:
-        n_clusters = max(1, len(user_ids))
-    if n_clusters < 2:
-        return {user_ids[i]: 0 for i in range(len(user_ids))}
-    
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-    labels = kmeans.fit_predict(X)
-    return {user_ids[i]: int(labels[i]) for i in range(len(user_ids))}
 
-def run_user_clustering(n_clusters=3):
-    """Run user clustering (alias for backward compatibility)."""
+    if len(user_ids) < 2:
+        return {str(user_ids[0]): 0}
+
+    n_clusters = min(n_clusters, len(user_ids))
+    if n_clusters < 2:
+        return {str(uid): 0 for uid in user_ids}
+
+    # Scale features for KMeans
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    kmeans = KMeans(
+        n_clusters=n_clusters,
+        random_state=42,
+        n_init=10,
+    )
+
+    labels = kmeans.fit_predict(X_scaled)
+
+    clusters = {
+        str(user_ids[i]): int(labels[i])
+        for i in range(len(user_ids))
+    }
+
+    logger.info(
+        "Clustered %d users into %d clusters",
+        len(user_ids),
+        n_clusters,
+    )
+
+    return clusters
+
+
+# ---------------------------------------------------------------------
+# Backward compatibility
+# ---------------------------------------------------------------------
+
+def run_user_clustering(n_clusters: int = 3) -> Dict[str, int]:
+    """Alias kept for backward compatibility."""
     return cluster_users(n_clusters)

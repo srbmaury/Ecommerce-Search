@@ -1,5 +1,3 @@
-
-# Refactored: use product service modules
 from backend.services.product.shared import serialize_product, DEFAULT_LIMIT
 from backend.services.product.read import get_all_products, get_products_by_ids, get_product_by_id
 from backend.services.product.dataframe import get_products_df

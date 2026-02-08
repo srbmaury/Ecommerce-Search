@@ -35,6 +35,24 @@ CLUSTER_BOOST_WEIGHT = 0.5
 
 # ---------- HELPERS ----------
 
+def user_category_score(profile: dict, category: str) -> float:
+    """Get user's preference score for a category."""
+    if not profile:
+        return 0.0
+    return profile.get("category_pref", {}).get(category, 0.0)
+
+
+def user_price_affinity(profile: dict, price: float) -> float:
+    """Calculate price affinity based on user's average price preference."""
+    if not profile:
+        return 0.0
+    avg_price = profile.get("avg_price")
+    if not avg_price:
+        return 0.0
+    denom = max(abs(avg_price), 1.0)
+    return max(0.0, 1.0 - abs(price - avg_price) / denom)
+
+
 def _fuzzy_match(text: str, query_words: List[str]) -> bool:
     text = text.lower()
     for w in query_words:

@@ -16,7 +16,9 @@ from datetime import timedelta
 
 from ml.train_ranker import main as train_ranker_main
 from ml.assign_user_clusters import assign_clusters_to_users
+from dotenv import load_dotenv
 
+load_dotenv()
 
 # ---------- CONFIG ----------
 
@@ -107,6 +109,21 @@ def enqueue_retrain_and_cluster():
 
 # ---------- CLI ----------
 
+def main():
+    """CLI entry point - run training directly or enqueue via RQ."""
+    import sys
+    
+    if len(sys.argv) > 1 and sys.argv[1] == "--enqueue":
+        # Enqueue job to RQ (requires worker to be running)
+        job = enqueue_retrain_and_cluster()
+        print(f"Enqueued retrain + cluster job {job.id} on queue '{QUEUE_NAME}' with status '{job.get_status()}'")
+        return
+    
+    # Run training directly (no RQ)
+    print("Running retrain + cluster directly (no RQ)...")
+    retrain_and_cluster()
+    print("Done!")
+
+
 if __name__ == "__main__":
-    job = enqueue_retrain_and_cluster()
-    print(f"Enqueued retrain+cluster job: {job.id}")
+    main()
