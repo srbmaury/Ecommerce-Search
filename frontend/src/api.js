@@ -22,34 +22,13 @@ export async function fetchCart(userId) {
     return res.json();
 }
 
-// Batch cart actions
-export async function batchCart(userId, actions) {
-    const res = await fetch(`${API_BASE_URL}/cart/batch`, {
+export async function updateCart(userId, productId, quantity) {
+    const res = await fetch(`${API_BASE_URL}/cart/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, actions })
+        body: JSON.stringify({ user_id: userId, product_id: productId, quantity })
     });
-    if (!res.ok) throw new Error('Failed to batch update cart');
-    return res.json();
-}
-
-export async function addToCart(userId, productId, query = '') {
-    const res = await fetch(`${API_BASE_URL}/cart`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, product_id: productId, query })
-    });
-    if (!res.ok) throw new Error('Failed to add to cart');
-    return res.json();
-}
-
-export async function removeFromCart(userId, productId) {
-    const res = await fetch(`${API_BASE_URL}/cart/remove`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, product_id: productId })
-    });
-    if (!res.ok) throw new Error('Failed to remove from cart');
+    if (!res.ok) throw new Error('Failed to update cart');
     return res.json();
 }
 
