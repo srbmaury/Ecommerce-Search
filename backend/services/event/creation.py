@@ -11,7 +11,6 @@ def create_search_event(
     position=None,
 ):
     normalized_user_id = normalize_user_id(user_id) or ""
-    logger.info(f"create_search_event called: user_id={user_id}, normalized={normalized_user_id}, product_id={product_id}, event_type={event_type}")
     with session_scope() as session:
         event = SearchEvent(
             user_id=normalized_user_id,
@@ -22,6 +21,5 @@ def create_search_event(
             position=position,
             timestamp=datetime.now(timezone.utc),
         )
-        logger.info(f"Adding SearchEvent: {event}")
         session.add(event)
         return event

@@ -42,14 +42,12 @@ def _compute_analytics():
 
     try:
         cluster_counts = get_cluster_counts()
-        logger.info(f"Cluster counts: {cluster_counts}")
     except Exception as e:
         logger.exception(f"Error in get_cluster_counts: {e}")
         raise
 
     try:
         top_queries = events["query"].value_counts().head(10)
-        logger.info(f"Top queries: {top_queries}")
     except Exception as e:
         logger.exception(f"Error in top_queries: {e}")
         raise
@@ -95,14 +93,12 @@ def get_cluster_counts():
 
     try:
         cluster_counts = get_cluster_counts()
-        logger.info(f"Cluster counts: {cluster_counts}")
     except Exception as e:
         logger.exception(f"Error in get_cluster_counts: {e}")
         raise
 
     try:
         top_queries = events["query"].value_counts().head(10)
-        logger.info(f"Top queries: {top_queries}")
     except Exception as e:
         logger.exception(f"Error in top_queries: {e}")
         raise
