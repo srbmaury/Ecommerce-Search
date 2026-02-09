@@ -12,12 +12,12 @@ export default function ProductCard({
     // Cart controls are now fully controlled by cartQuantity prop
     const handleAddToCart = (e) => {
         e.stopPropagation();
-        if (onCartUpdate) onCartUpdate(1, product.product_id);
+        if (onCartUpdate) onCartUpdate(1, product);
     };
 
     const handleRemoveFromCart = (e) => {
         e.stopPropagation();
-        if (onCartUpdate) onCartUpdate(-1, product.product_id);
+        if (onCartUpdate) onCartUpdate(-1, product);
     };
 
     const onClick = async (e) => {
