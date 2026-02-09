@@ -5,8 +5,7 @@ import {
 	fetchRecommendations,
 	searchProducts,
 	fetchCart,
-	addToCart,
-	removeFromCart,
+	updateCart,
 	clearCart,
 	login,
 	signup
@@ -48,6 +47,7 @@ export default function App() {
 	const [showCart, setShowCart] = useState(false);
 	const [cartLoading, setCartLoading] = useState(false);
 	const [cartLoadedOnce, setCartLoadedOnce] = useState(false);
+	const [clearCartLoading, setClearCartLoading] = useState(false);
 
 	/* ---------- FILTERS & SORT ---------- */
 	const [categoryFilter, setCategoryFilter] = useState('');
@@ -161,9 +161,9 @@ export default function App() {
 	};
 
 	// Optimistic cart update for ProductCard and everywhere
-	// Debounce batching for cart API updates
-	const cartUpdateQueue = useRef([]);
-	const cartUpdateTimer = useRef(null);
+	// Debounce cart updates per product (300ms)
+	const cartUpdateQueue = useRef({});
+	const cartUpdateTimers = useRef({});
 
 	const handleCartUpdate = (delta, productId) => {
 		setCart(prevCart => {
@@ -180,36 +180,29 @@ export default function App() {
 			return prevCart;
 		});
 
-		// Add update to queue
-		cartUpdateQueue.current.push({ delta, productId });
-		if (cartUpdateTimer.current) clearTimeout(cartUpdateTimer.current);
-		cartUpdateTimer.current = setTimeout(() => {
-			const updates = cartUpdateQueue.current;
-			cartUpdateQueue.current = [];
-			const netChanges = {};
-			updates.forEach(({ delta, productId }) => {
-				netChanges[productId] = (netChanges[productId] || 0) + delta;
-			});
-			// Build batch actions
-			const actions = [];
-			Object.entries(netChanges).forEach(([productId, netDelta]) => {
-				if (netDelta === 0) return;
-				const actionType = netDelta > 0 ? 'add' : 'remove';
-				const absDelta = Math.abs(netDelta);
-				for (let i = 0; i < absDelta; i++) {
-					actions.push({ action: actionType, product_id: productId });
-				}
-			});
-			if (actions.length === 0) return;
-			import('./api').then(({ batchCart }) => {
-				batchCart(user.user_id, actions)
-					.then(() => fetchCartData())
-					.catch(err => {
-						showToast(err.message || 'Cart update failed', 'error');
-						fetchCartData();
-					});
-			});
-		}, 1000);
+		// Accumulate delta for this product
+		cartUpdateQueue.current[productId] = (cartUpdateQueue.current[productId] || 0) + delta;
+
+		// Clear existing timer for this product
+		if (cartUpdateTimers.current[productId]) {
+			clearTimeout(cartUpdateTimers.current[productId]);
+		}
+
+		// Set new 300ms debounce timer
+		cartUpdateTimers.current[productId] = setTimeout(() => {
+			const netQuantity = cartUpdateQueue.current[productId];
+			delete cartUpdateQueue.current[productId];
+			delete cartUpdateTimers.current[productId];
+
+			if (netQuantity === 0) return;
+
+			updateCart(user.user_id, productId, netQuantity)
+				.then(() => fetchCartData())
+				.catch(err => {
+					showToast(err.message || 'Cart update failed', 'error');
+					fetchCartData();
+				});
+		}, 300);
 	};
 
 	useEffect(() => {
@@ -228,14 +221,14 @@ export default function App() {
 		fetchCartData(true); // initial load
 	}, [user]);
 
-	const removeFromCartHandler = async (productId) => {
-		await removeFromCart(user.user_id, productId);
-		fetchCartData();
-	};
-
 	const clearCartHandler = async () => {
-		await clearCart(user.user_id);
-		fetchCartData();
+		setClearCartLoading(true);
+		try {
+			await clearCart(user.user_id);
+			await fetchCartData();
+		} finally {
+			setClearCartLoading(false);
+		}
 	};
 
 	const handleAuthSubmit = async (e) => {
@@ -341,8 +334,8 @@ export default function App() {
 			{/* Analytics Dashboard Modal */}
 			{showAnalytics && (
 				<div className="modal-overlay" onClick={() => setShowAnalytics(false)}>
-					<div className="analytics-modal" onClick={e => e.stopPropagation()} style={{ background: '#f9f9f9', borderRadius: 16, padding: 24, maxWidth: 1300, margin: '40px auto', boxShadow: '0 4px 24px #0001', position: 'relative' }}>
-						<button className="modal-close" style={{ position: 'absolute', top: 16, right: 16, fontSize: 24, background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setShowAnalytics(false)}>✕</button>
+					<div className="analytics-modal" onClick={e => e.stopPropagation()}>
+						<button className="modal-close" onClick={() => setShowAnalytics(false)}>✕</button>
 						<AnalyticsDashboard />
 					</div>
 				</div>
@@ -415,7 +408,12 @@ export default function App() {
 							</div>
 							<div className="cart-footer">
 								<div className="cart-total">Total: <strong>${cartTotal.toFixed(2)}</strong></div>
-								<button className="cart-clear-btn" onClick={clearCartHandler}>Clear Cart</button>
+								<button className="cart-clear-btn" onClick={clearCartHandler} disabled={clearCartLoading}>
+									{clearCartLoading ? (
+										<span className="spinner" style={{ marginRight: 8, verticalAlign: 'middle' }}></span>
+									) : null}
+									{clearCartLoading ? 'Clearing...' : 'Clear Cart'}
+								</button>
 							</div>
 						</>
 					)}

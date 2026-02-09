@@ -75,14 +75,12 @@ class CartItem(Base):
         String(50),
         ForeignKey("users.user_id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     product_id = Column(
         Integer,
         ForeignKey("products.id", ondelete="CASCADE"),
         nullable=False,
-        index=True,
     )
 
     quantity = Column(Integer, nullable=False, default=1)
@@ -93,6 +91,10 @@ class CartItem(Base):
     # Relationships
     user = relationship("User", back_populates="cart_items")
     product = relationship("Product")
+
+    __table_args__ = (
+        Index("idx_cart_user_product", "user_id", "product_id", unique=True),
+    )
 
     def __repr__(self) -> str:
         return (

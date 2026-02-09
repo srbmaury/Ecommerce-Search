@@ -1,3 +1,4 @@
+import threading
 from backend.utils.sanitize import sanitize_user_id
 from backend.services.db_user_manager import (
     get_user_by_id
@@ -42,70 +43,8 @@ def get_valid_user(raw_user_id):
 
 # ---------- Controllers ----------
 
-def batch_cart_controller(data):
-    """
-    Accepts a list of cart actions: [{action: 'add'|'remove', product_id, query}]
-    { user_id: str, actions: [ ... ] }
-    """
-    raw_user_id = data.get("user_id")
-    actions = data.get("actions", [])
-    if not actions or not isinstance(actions, list):
-        return error_response("actions (list) required")
-    user, error = get_valid_user(raw_user_id)
-    if error:
-        return error
-    user_id = user.user_id
-    group = getattr(user, "group", None) or DEFAULT_GROUP
-    results = []
-    for act in actions:
-        product_id = act.get("product_id")
-        query = act.get("query", "")
-        if not product_id:
-            results.append({"error": "product_id required"})
-            continue
-        try:
-            if act.get("action") == "add":
-                add_to_cart(user_id, int(product_id), 1)
-                create_search_event(
-                    user_id=user_id,
-                    query=query,
-                    product_id=product_id,
-                    event_type="add_to_cart",
-                    group=group,
-                )
-                update_product_popularity(product_id, 3)
-                record_event()
-                results.append({"status": "added", "product_id": product_id})
-            elif act.get("action") == "remove":
-                remove_from_cart(user_id, int(product_id), 1)
-                results.append({"status": "removed", "product_id": product_id})
-            else:
-                results.append({"error": "invalid action", "product_id": product_id})
-        except Exception as e:
-            results.append({"error": str(e), "product_id": product_id})
-    return {"results": results}, 200
-
-def add_to_cart_controller(data):
-    raw_user_id = data.get("user_id")
-    product_id = data.get("product_id")
-    query = data.get("query", "")
-
-    if not product_id:
-        return error_response("user_id and product_id required")
-
-    user, error = get_valid_user(raw_user_id)
-    if error:
-        return error
-
-    user_id = user.user_id
-    group = getattr(user, "group", None) or DEFAULT_GROUP
-
-    try:
-        add_to_cart(user_id, int(product_id), 1)
-    except Exception as e:
-        return error_response(f"Failed to update cart: {str(e)}", 500)
-
-    # Non-critical analytics logging
+def _log_cart_analytics(user_id, product_id, query, group):
+    """Background task for non-critical analytics logging."""
     try:
         create_search_event(
             user_id=user_id,
@@ -116,11 +55,50 @@ def add_to_cart_controller(data):
         )
     except Exception:
         pass
-
-    update_product_popularity(product_id, 3)
+    try:
+        update_product_popularity(product_id, 3)
+    except Exception:
+        pass
     record_event()
 
-    return {"status": "added to cart"}, 200
+
+def update_cart_controller(data):
+    """
+    Unified cart update: accepts quantity (positive = add, negative = remove).
+    """
+    raw_user_id = data.get("user_id")
+    product_id = data.get("product_id")
+    quantity = data.get("quantity", 1)
+    query = data.get("query", "")
+
+    if not product_id:
+        return error_response("product_id required")
+
+    user, error = get_valid_user(raw_user_id)
+    if error:
+        return error
+
+    user_id = user.user_id
+    group = getattr(user, "group", None) or DEFAULT_GROUP
+
+    try:
+        if quantity > 0:
+            add_to_cart(user_id, int(product_id), quantity)
+        elif quantity < 0:
+            remove_from_cart(user_id, int(product_id), abs(quantity))
+        # quantity == 0 is a no-op
+    except Exception as e:
+        return error_response(f"Failed to update cart: {str(e)}", 500)
+
+    # Run analytics in background thread for adds
+    if quantity > 0:
+        threading.Thread(
+            target=_log_cart_analytics,
+            args=(user_id, product_id, query, group),
+            daemon=True
+        ).start()
+
+    return {"status": "cart updated", "quantity": quantity}, 200
 
 
 def get_cart_controller(raw_user_id):
@@ -171,25 +149,6 @@ def get_cart_controller(raw_user_id):
         "total_items": total_items,
         "count": total_items,
     }, 200
-
-
-def remove_from_cart_controller(data):
-    raw_user_id = data.get("user_id")
-    product_id = data.get("product_id")
-
-    if not product_id:
-        return error_response("user_id and product_id required")
-
-    user, error = get_valid_user(raw_user_id)
-    if error:
-        return error
-
-    try:
-        remove_from_cart(user["user_id"], int(product_id), 1)
-    except Exception:
-        pass
-
-    return {"status": "removed from cart"}, 200
 
 
 def clear_cart_controller(data):
