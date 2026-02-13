@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
 import { useCart } from './useCart';
 import { useSearch } from './useSearch';
 import AuthForm from './AuthForm';
+import ForgotPassword from './ForgotPassword';
+import ResetPassword from './ResetPassword';
+import VerifyEmail from './VerifyEmail';
 import CartModal from './CartModal';
 import ProductModal from './ProductModal';
 import Header from './Header';
@@ -23,11 +26,38 @@ export default function App() {
 		setUsername,
 		password,
 		setPassword,
+		email,
+		setEmail,
 		authError,
 		authLoading,
+		authView,
+		setAuthView,
 		handleAuthSubmit,
 		logout
 	} = useAuth();
+
+	// Check URL for reset/verify token on mount
+	const [urlToken, setUrlToken] = useState(null);
+	
+	useEffect(() => {
+		const params = new URLSearchParams(window.location.search);
+		const resetToken = params.get('token');
+		const path = window.location.pathname;
+		
+		if (path.includes('reset-password') && resetToken) {
+			setUrlToken(resetToken);
+			setAuthView('reset-password');
+		} else if (path.includes('verify-email') && resetToken) {
+			setUrlToken(resetToken);
+			setAuthView('verify-email');
+		}
+	}, [setAuthView]);
+
+	const clearUrlAndGoToAuth = () => {
+		window.history.pushState({}, '', '/');
+		setUrlToken(null);
+		setAuthView('auth');
+	};
 
 	/* ---------- TOAST ---------- */
 	const [toast, setToast] = useState(null);
@@ -79,18 +109,51 @@ export default function App() {
 
 	/* ---------- PRODUCT DETAIL MODAL ---------- */
 	const [selectedProduct, setSelectedProduct] = useState(null);
+	
 	if (!user) {
+		// Handle different auth views
+		if (authView === 'forgot-password') {
+			return (
+				<ForgotPassword
+					onBack={() => setAuthView('auth')}
+				/>
+			);
+		}
+		
+		if (authView === 'reset-password') {
+			return (
+				<ResetPassword
+					token={urlToken}
+					onSuccess={clearUrlAndGoToAuth}
+					onBack={clearUrlAndGoToAuth}
+				/>
+			);
+		}
+		
+		if (authView === 'verify-email') {
+			return (
+				<VerifyEmail
+					token={urlToken}
+					onSuccess={clearUrlAndGoToAuth}
+					onBack={clearUrlAndGoToAuth}
+				/>
+			);
+		}
+		
 		return (
 			<AuthForm
 				isSignup={isSignup}
 				username={username}
 				password={password}
+				email={email}
 				authError={authError}
 				authLoading={authLoading}
 				onUsernameChange={e => setUsername(e.target.value)}
 				onPasswordChange={e => setPassword(e.target.value)}
+				onEmailChange={e => setEmail(e.target.value)}
 				onSubmit={handleAuthSubmit}
 				onToggleMode={() => setIsSignup(s => !s)}
+				onForgotPassword={() => setAuthView('forgot-password')}
 			/>
 		);
 	}
