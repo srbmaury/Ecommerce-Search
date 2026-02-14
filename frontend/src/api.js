@@ -61,11 +61,14 @@ export async function login(username, password) {
     return data;
 }
 
-export async function signup(username, password) {
+export async function signup(username, password, email = null) {
+    const body = { username, password };
+    if (email) body.email = email;
+    
     const res = await fetch(`${API_BASE_URL}/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify(body)
     });
     let data;
     try {
@@ -75,6 +78,60 @@ export async function signup(username, password) {
     }
     if (!res.ok) {
         throw new Error(data.error || 'Signup failed');
+    }
+    return data;
+}
+
+// Email verification
+export async function verifyEmail(token) {
+    const res = await fetch(`${API_BASE_URL}/verify-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || 'Verification failed');
+    }
+    return data;
+}
+
+export async function resendVerification(email) {
+    const res = await fetch(`${API_BASE_URL}/resend-verification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || 'Failed to resend verification');
+    }
+    return data;
+}
+
+// Password reset
+export async function forgotPassword(email) {
+    const res = await fetch(`${API_BASE_URL}/forgot-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || 'Request failed');
+    }
+    return data;
+}
+
+export async function resetPassword(token, password) {
+    const res = await fetch(`${API_BASE_URL}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, password })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+        throw new Error(data.error || 'Reset failed');
     }
     return data;
 }

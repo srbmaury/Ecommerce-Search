@@ -24,6 +24,7 @@ export function useSearch(user, showToast) {
     // Search function
     const search = useCallback(async (e) => {
         e.preventDefault();
+        if (!user?.user_id) return;
         setSearchLoading(true);
         setCurrentPage(1);
         try {
@@ -51,7 +52,7 @@ export function useSearch(user, showToast) {
         } finally {
             setSearchLoading(false);
         }
-    }, [query, user.user_id, showToast]);
+    }, [query, user?.user_id, showToast]);
 
     // Apply filters and sorting to results
     useEffect(() => {

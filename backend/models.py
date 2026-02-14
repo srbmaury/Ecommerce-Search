@@ -12,6 +12,7 @@ from sqlalchemy import (
     Text,
     ForeignKey,
     Index,
+    Boolean,
 )
 from sqlalchemy.orm import (
     declarative_base,
@@ -39,7 +40,9 @@ class User(Base):
 
     user_id = Column(String(50), primary_key=True)
     username = Column(String(100), unique=True, nullable=False, index=True)
+    email = Column(String(255), unique=True, nullable=True, index=True)
     password_hash = Column(String(255), nullable=False)
+    email_verified = Column(Boolean, default=False, nullable=False)
 
     group = Column(String(10), default="A", index=True)
     cluster = Column(Integer, nullable=True, index=True)
@@ -180,3 +183,50 @@ class SearchEvent(Base):
             f"<SearchEvent user_id={self.user_id} "
             f"type={self.event_type} ts={self.timestamp.isoformat()}>"
         )
+
+
+# ---------- EMAIL VERIFICATION TOKEN ----------
+
+class EmailVerificationToken(Base):
+    """Token for email verification."""
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        String(50),
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    user = relationship("User", backref=backref("email_tokens", cascade="all, delete-orphan"))
+
+    def __repr__(self) -> str:
+        return f"<EmailVerificationToken user_id={self.user_id}>"
+
+
+# ---------- PASSWORD RESET TOKEN ----------
+
+class PasswordResetToken(Base):
+    """Token for password reset."""
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(
+        String(50),
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    token = Column(String(64), unique=True, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    user = relationship("User", backref=backref("reset_tokens", cascade="all, delete-orphan"))
+
+    def __repr__(self) -> str:
+        return f"<PasswordResetToken user_id={self.user_id}>"

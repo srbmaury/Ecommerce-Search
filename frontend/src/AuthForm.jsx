@@ -4,12 +4,15 @@ export default function AuthForm({
     isSignup,
     username,
     password,
+    email,
     authError,
     authLoading,
     onUsernameChange,
     onPasswordChange,
+    onEmailChange,
     onSubmit,
-    onToggleMode
+    onToggleMode,
+    onForgotPassword
 }) {
     return (
         <div className="auth-page">
@@ -22,6 +25,14 @@ export default function AuthForm({
                         value={username}
                         onChange={onUsernameChange}
                     />
+                    {isSignup && (
+                        <input
+                            type="email"
+                            placeholder="Email (optional, for password recovery)"
+                            value={email || ''}
+                            onChange={onEmailChange}
+                        />
+                    )}
                     <input
                         type="password"
                         placeholder="Password"
@@ -33,6 +44,11 @@ export default function AuthForm({
                     </button>
                     {authError && <div className="auth-error">{authError}</div>}
                 </form>
+                {!isSignup && (
+                    <p className="forgot-password">
+                        <span onClick={onForgotPassword}>Forgot password?</span>
+                    </p>
+                )}
                 <p className="auth-toggle">
                     {isSignup ? (
                         <>

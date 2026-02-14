@@ -563,6 +563,48 @@ body {
     text-align: center;
 }
 
+/* ---------- SUCCESS ---------- */
+.auth-success {
+    font-size: 13px;
+    color: #16a34a;
+    margin-top: 4px;
+    text-align: center;
+    padding: 12px;
+    background: #dcfce7;
+    border-radius: 6px;
+}
+
+/* ---------- DESCRIPTION ---------- */
+.auth-description {
+    font-size: 14px;
+    color: #6b7280;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+/* ---------- LOADING ---------- */
+.auth-loading {
+    text-align: center;
+    color: #6b7280;
+    padding: 20px;
+}
+
+/* ---------- FORGOT PASSWORD ---------- */
+.forgot-password {
+    margin-top: 12px;
+    font-size: 14px;
+    text-align: center;
+}
+
+.forgot-password span {
+    color: #6366f1;
+    cursor: pointer;
+}
+
+.forgot-password span:hover {
+    text-decoration: underline;
+}
+
 /* ---------- TOGGLE ---------- */
 .auth-toggle {
     margin-top: 16px;

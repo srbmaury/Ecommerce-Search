@@ -14,6 +14,9 @@ from typing import Tuple, Optional
 # ---------- CONFIG ----------
 
 USERNAME_REGEX = re.compile(r"^[a-zA-Z0-9_]{3,50}$")
+EMAIL_REGEX = re.compile(
+    r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+)
 MIN_PASSWORD_LENGTH = 8
 BCRYPT_ROUNDS = 12  # Explicit cost factor
 
@@ -35,6 +38,26 @@ def validate_username(username: str) -> Tuple[bool, Optional[str]]:
             "letters, numbers, or underscores."
         )
 
+    return True, None
+
+
+def validate_email(email: str) -> Tuple[bool, Optional[str]]:
+    """
+    Valid email addresses:
+    - Standard email format
+    - Case-insensitive
+    """
+    if not email:
+        return False, "Email is required."
+    
+    email = email.strip().lower()
+    
+    if len(email) > 255:
+        return False, "Email must be 255 characters or fewer."
+    
+    if not EMAIL_REGEX.fullmatch(email):
+        return False, "Please enter a valid email address."
+    
     return True, None
 
 

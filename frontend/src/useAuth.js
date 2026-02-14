@@ -9,8 +9,10 @@ export function useAuth() {
     const [isSignup, setIsSignup] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [email, setEmail] = useState('');
     const [authError, setAuthError] = useState('');
     const [authLoading, setAuthLoading] = useState(false);
+    const [authView, setAuthView] = useState('auth'); // 'auth', 'forgot-password', 'reset-password', 'verify-email'
 
     useEffect(() => {
         if (user) localStorage.setItem('user', JSON.stringify(user));
@@ -27,7 +29,7 @@ export function useAuth() {
         setAuthLoading(true);
         try {
             const data = isSignup
-                ? await signup(username, password)
+                ? await signup(username, password, email || null)
                 : await login(username, password);
             setUser(data);
         } catch (err) {
@@ -46,10 +48,14 @@ export function useAuth() {
         setUsername,
         password,
         setPassword,
+        email,
+        setEmail,
         authError,
         setAuthError,
         authLoading,
         setAuthLoading,
+        authView,
+        setAuthView,
         handleAuthSubmit,
         logout
     };
