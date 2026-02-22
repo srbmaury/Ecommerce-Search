@@ -53,6 +53,13 @@ def utcnow():
     return datetime.now(timezone.utc)
 
 
+def ensure_timezone_aware(dt):
+    """Convert timezone-naive datetime to timezone-aware (UTC)."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 # ---------- EMAIL VERIFICATION ----------
 
 def create_email_verification_token(user_id: str) -> str:
@@ -101,7 +108,7 @@ def verify_email_token(token: str) -> Optional[User]:
         if not verification:
             return None
         
-        if verification.expires_at < utcnow():
+        if ensure_timezone_aware(verification.expires_at) < utcnow():
             # Token expired, delete it
             session.delete(verification)
             session.commit()
@@ -180,7 +187,7 @@ def verify_password_reset_token(token: str) -> Optional[User]:
         if not reset:
             return None
         
-        if reset.expires_at < utcnow():
+        if ensure_timezone_aware(reset.expires_at) < utcnow():
             # Token expired
             reset.used = True
             session.commit()

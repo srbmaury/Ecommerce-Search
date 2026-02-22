@@ -3,7 +3,7 @@ User profile service.
 
 Responsibilities:
 - Cache user profiles in memory
-- Refresh profiles on a fixed interval
+- Refresh profiles on a fixed interval (async to prevent blocking)
 - Allow forced refresh
 - Provide thread-safe access
 """
@@ -27,6 +27,7 @@ class ProfileCache:
         self.profiles = None
         self.last_refresh = None
         self.lock = threading.Lock()
+        self.refresh_in_progress = False
 
 
 _state = ProfileCache()
@@ -50,7 +51,8 @@ def get_profiles():
     """
     Get cached user profiles.
 
-    Profiles are refreshed automatically if stale.
+    Profiles are refreshed automatically if stale (async, non-blocking).
+    Returns stale cache immediately while background refresh happens.
     Thread-safe.
     """
     now = datetime.now(timezone.utc)
@@ -59,11 +61,17 @@ def get_profiles():
     if _state.profiles is not None and not _is_stale(now):
         return _state.profiles
 
-    # Slow path: refresh under lock
+    # Return stale cache while background refresh happens
+    if _state.profiles is not None:
+        # Trigger async refresh in background (don't block)
+        if not _state.refresh_in_progress:
+            _trigger_async_refresh()
+        return _state.profiles  # Return stale, not empty ✓
+    
+    # First load: must block to get initial data
     with _state.lock:
-        # Double-check after acquiring lock
         if _state.profiles is None or _is_stale(now):
-            logger.info("Refreshing user profiles cache")
+            logger.info("Refreshing user profiles cache (blocking initial load)")
             _state.profiles = build_user_profiles()
             _state.last_refresh = now
 
@@ -73,9 +81,51 @@ def get_profiles():
 def refresh_profiles():
     """
     Force immediate refresh of user profiles.
+    Blocks until refresh completes.
     Thread-safe.
     """
     with _state.lock:
         logger.info("Force refreshing user profiles cache")
         _state.profiles = build_user_profiles()
         _state.last_refresh = datetime.now(timezone.utc)
+        _state.refresh_in_progress = False
+
+
+def _trigger_async_refresh():
+    """
+    Trigger background refresh without blocking.
+    Multiple simultaneous refreshes are prevented by flag.
+    """
+    if _state.refresh_in_progress:
+        return
+    
+    _state.refresh_in_progress = True
+    thread = threading.Thread(
+        target=_background_refresh,
+        daemon=True,
+        name="ProfileCacheRefresh"
+    )
+    thread.start()
+
+
+def _background_refresh():
+    """
+    Background thread that refreshes profiles.
+    Doesn't block main requests.
+    """
+    try:
+        logger.info("Starting background profile refresh")
+        new_profiles = build_user_profiles()
+        
+        # Acquire lock only to swap the cache (fast operation)
+        with _state.lock:
+            _state.profiles = new_profiles
+            _state.last_refresh = datetime.now(timezone.utc)
+            _state.refresh_in_progress = False
+        
+        logger.info("Background profile refresh completed")
+    
+    except Exception as e:
+        logger.exception(f"Background profile refresh failed: {e}")
+        _state.refresh_in_progress = False
+

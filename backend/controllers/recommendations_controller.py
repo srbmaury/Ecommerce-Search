@@ -1,6 +1,4 @@
-import os
 import json
-import requests
 from sqlalchemy import desc
 
 from backend.services.db_event_service import get_events_df
@@ -8,6 +6,7 @@ from backend.services.user_profile_service import get_profiles
 from backend.services.db_product_service import get_products_by_ids
 from backend.models import Product
 from backend.services.db_user_manager import get_user_by_id
+from backend.services.redis_client import redis_get_json, redis_setex_json
 from backend.utils.database import get_db_session
 
 from ml.features import build_features
@@ -22,45 +21,6 @@ FINAL_LIMIT = 10
 MAX_PER_CATEGORY = 3
 
 EVENT_TYPES = ("click", "add_to_cart")
-
-UPSTASH_REDIS_REST_URL = os.getenv("UPSTASH_REDIS_REST_URL")
-UPSTASH_REDIS_REST_TOKEN = os.getenv("UPSTASH_REDIS_REST_TOKEN")
-
-
-# ---------- REDIS HELPERS ----------
-
-def redis_enabled():
-    return bool(UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN)
-
-
-def redis_get(key):
-    if not redis_enabled():
-        return None
-    try:
-        resp = requests.get(
-            f"{UPSTASH_REDIS_REST_URL}/get/{key}",
-            headers={"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"},
-            timeout=2,
-        )
-        if resp.status_code == 200:
-            return resp.json().get("result")
-    except Exception:
-        pass
-    return None
-
-
-def redis_setex(key, seconds, value):
-    if not redis_enabled():
-        return
-    try:
-        requests.post(
-            f"{UPSTASH_REDIS_REST_URL}/setex/{key}/{seconds}",
-            headers={"Authorization": f"Bearer {UPSTASH_REDIS_REST_TOKEN}"},
-            data=value,
-            timeout=2,
-        )
-    except Exception:
-        pass
 
 
 # ---------- HELPERS ----------
@@ -98,9 +58,9 @@ def get_cluster_category_boost(cluster, profiles):
         return {}
 
     boost_key = f"cluster_boost:{cluster}"
-    cached = redis_get(boost_key)
+    cached = redis_get_json(boost_key)
     if cached:
-        return json.loads(cached)
+        return cached
 
     cat_counts = {}
     for profile in profiles.values():
@@ -114,7 +74,7 @@ def get_cluster_category_boost(cluster, profiles):
 
     total = sum(cat_counts.values())
     boost = {k: v / total for k, v in cat_counts.items()}
-    redis_setex(boost_key, 3600, json.dumps(boost))
+    redis_setex_json(boost_key, boost, 3600)
     return boost
 
 
@@ -125,9 +85,9 @@ def recommendations_controller(user_id):
         return {"error": "user_id required"}, 400
 
     cache_key = f"recommendations:{user_id}"
-    cached = redis_get(cache_key)
+    cached = redis_get_json(cache_key)
     if cached:
-        return json.loads(cached), 200
+        return cached, 200
 
     # ---- user context ----
     user = get_user_by_id(user_id)
@@ -212,5 +172,5 @@ def recommendations_controller(user_id):
         "similar": results,
     }
 
-    redis_setex(cache_key, CACHE_DURATION_SECONDS, json.dumps(result))
+    redis_setex_json(cache_key, result, CACHE_DURATION_SECONDS)
     return result, 200

@@ -15,6 +15,9 @@ def sanitize_user_id(user_id):
     if not user_id:
         return None
 
+    if user_id.lower() in {"undefined", "null", "none"}:
+        return None
+
     # Basic validation: length and no special characters that could cause issues
     if len(user_id) > 128 or any(c in user_id for c in ("\n", "\r", ",")):
         return None

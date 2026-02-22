@@ -8,7 +8,6 @@ Responsibilities:
 - Register blueprints
 - Expose WSGI-compatible app
 """
-from backend.utils.response_time_logger import setup_response_time_logging
 import os
 import logging
 from flask import Flask
@@ -25,6 +24,7 @@ from backend.routes.events_routes import bp as events_bp
 from backend.routes.cart_routes import bp as cart_bp
 from backend.routes.analytics_routes import bp as analytics_bp
 from backend.routes.recommendations_routes import bp as rec_bp
+from backend.routes.cache_routes import bp as cache_bp
 
 
 # ---------- ENV & LOGGING ----------
@@ -108,6 +108,7 @@ def _register_routes(app: Flask):
     app.register_blueprint(cart_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(rec_bp)
+    app.register_blueprint(cache_bp)  # NEW: Cache management endpoints
 
 
 # ---------- WSGI ENTRYPOINT ----------

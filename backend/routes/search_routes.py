@@ -10,6 +10,8 @@ def search():
         return {"message": "CORS preflight successful"}, 200
     resp, status = search_controller(
         request.args.get("q"),
-        request.args.get("user_id")
+        request.args.get("user_id"),
+        request.args.get("cursor"),
+        request.args.get("limit"),
     )
     return jsonify(resp), status

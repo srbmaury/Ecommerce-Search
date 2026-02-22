@@ -130,6 +130,13 @@ def login_controller(data):
     if not user or not password_valid:
         return invalid_response("invalid credentials", status=401)
 
+    # Check if email verification is required and completed
+    if user.email and not user.email_verified:
+        return invalid_response(
+            "Please verify your email address before logging in. Check your inbox for the verification link.", 
+            status=403
+        )
+
     return jsonify({
         "user_id": user.user_id,
         "username": user.username,

@@ -23,12 +23,9 @@ export default function ProductCard({
     const onClick = async (e) => {
         if (e.target.tagName === 'BUTTON') return;
         if (onProductClick) onProductClick(product);
-        console.log('ProductCard clicked:', { isRecommendation, productId: product.product_id, userId, query });
         if (!isRecommendation) {
             try {
-                console.log('Logging click event for product:', product.product_id);
                 await logEvent('click', product.product_id, query, userId);
-                console.log('Click event logged successfully');
             } catch (err) {
                 console.error('Failed to log click event:', err);
             }
@@ -45,52 +42,17 @@ export default function ProductCard({
                     Add to Cart
                 </button>
             ) : (
-                <div className="quantity-controls" onClick={e => e.stopPropagation()} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '10px',
-                    padding: '8px'
-                }}>
+                <div className="quantity-controls" onClick={e => e.stopPropagation()}>
                     <button
                         onClick={handleRemoveFromCart}
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            border: '2px solid #4CAF50',
-                            background: 'white',
-                            color: '#4CAF50',
-                            fontSize: '18px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
+                        className="qty-btn qty-btn-decrement"
                     >
                         −
                     </button>
-                    <span style={{
-                        fontSize: '16px',
-                        fontWeight: 'bold',
-                        minWidth: '30px',
-                        textAlign: 'center'
-                    }}>{cartQuantity}</span>
+                    <span className="qty-value">{cartQuantity}</span>
                     <button
                         onClick={handleAddToCart}
-                        style={{
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            border: '2px solid #4CAF50',
-                            background: '#4CAF50',
-                            color: 'white',
-                            fontSize: '18px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
+                        className="qty-btn qty-btn-increment"
                     >
                         +
                     </button>

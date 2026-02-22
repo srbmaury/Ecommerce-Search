@@ -28,10 +28,22 @@ export function useAuth() {
         setAuthError("");
         setAuthLoading(true);
         try {
-            const data = isSignup
-                ? await signup(username, password, email || null)
-                : await login(username, password);
-            setUser(data);
+            if (isSignup) {
+                await signup(username, password, email || null);
+                // Don't auto-login after signup - user needs to verify email first
+                if (email) {
+                    setAuthError('Account created successfully! Please check your email to verify your account before logging in.');
+                } else {
+                    setAuthError('Account created successfully! You can now login with your credentials.');
+                }
+                setIsSignup(false); // Switch to login view
+                setUsername('');
+                setPassword('');
+                setEmail('');
+            } else {
+                const data = await login(username, password);
+                setUser(data); // Only login on successful login, not signup
+            }
         } catch (err) {
             setAuthError(err.message || 'Network error. Please try again.');
         } finally {

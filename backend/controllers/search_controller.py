@@ -8,12 +8,38 @@ from backend.utils.intent import detect_intent
 
 DEFAULT_GROUP = "A"
 MIN_RESULTS_THRESHOLD = 5
+DEFAULT_PAGE_SIZE = 24
+MAX_PAGE_SIZE = 100
 
 
 # ---------- Helpers ----------
 
 def error_response(message, status=400):
     return {"error": message}, status
+
+
+def parse_pagination(cursor_raw, limit_raw):
+    cursor = 0
+    limit = DEFAULT_PAGE_SIZE
+
+    if cursor_raw not in (None, ""):
+        try:
+            cursor = int(cursor_raw)
+        except Exception:
+            return None, None, "invalid cursor"
+
+    if limit_raw not in (None, ""):
+        try:
+            limit = int(limit_raw)
+        except Exception:
+            return None, None, "invalid limit"
+
+    if cursor < 0:
+        return None, None, "cursor must be >= 0"
+    if limit <= 0 or limit > MAX_PAGE_SIZE:
+        return None, None, f"limit must be between 1 and {MAX_PAGE_SIZE}"
+
+    return cursor, limit, None
 
 
 def resolve_user_context(raw_user_id):
@@ -60,12 +86,16 @@ def apply_sort(products, sort_key):
 
 # ---------- Controller ----------
 
-def search_controller(query, raw_user_id):
+def search_controller(query, raw_user_id, cursor_raw=None, limit_raw=None):
     timings = {}
     t0 = time.perf_counter()
 
     if not query:
         return error_response("query required")
+
+    cursor, page_size, pagination_error = parse_pagination(cursor_raw, limit_raw)
+    if pagination_error:
+        return error_response(pagination_error)
 
     # -------- user context --------
     t_user = time.perf_counter()
@@ -87,6 +117,7 @@ def search_controller(query, raw_user_id):
         user_id,
         cluster=cluster,
         ab_group=group,
+        limit=None,
     )
     timings["search_products"] = (time.perf_counter() - t_search) * 1000
 
@@ -98,6 +129,7 @@ def search_controller(query, raw_user_id):
             user_id,
             cluster=cluster,
             ab_group=group,
+            limit=None,
         )
 
         existing_ids = {p["product_id"] for p in products}
@@ -134,8 +166,20 @@ def search_controller(query, raw_user_id):
 
     timings["total"] = (time.perf_counter() - t0) * 1000
 
+    total_results = len(products)
+    paginated_products = products[cursor : cursor + page_size]
+    next_cursor = cursor + page_size if cursor + page_size < total_results else None
+    has_more = next_cursor is not None
+
     return {
-        "products": products,
+        "products": paginated_products,
+        "pagination": {
+            "cursor": cursor,
+            "next_cursor": next_cursor,
+            "limit": page_size,
+            "has_more": has_more,
+            "total": total_results,
+        },
         "intent": {
             "detected": detected_intents,
             "suggested_category": intent["suggested_category"],

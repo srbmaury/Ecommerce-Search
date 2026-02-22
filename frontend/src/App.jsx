@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { useCart } from './useCart';
 import { useSearch } from './useSearch';
@@ -13,10 +13,27 @@ import Toast from './Toast';
 import FiltersBar from './FiltersBar';
 import ProductGrid from './ProductGrid';
 import { Loading, EmptyState } from './LoadingEmptyState';
+import AdminCacheManager from './AdminCacheManager';
 import './App.css';
 import AnalyticsDashboard from './AnalyticsDashboard';
 
 export default function App() {
+	const initialRouteState = (() => {
+		const params = new URLSearchParams(window.location.search);
+		const routeToken = params.get('token');
+		const path = window.location.pathname;
+
+		if (path.includes('reset-password') && routeToken) {
+			return { token: routeToken, view: 'reset-password' };
+		}
+
+		if (path.includes('verify-email') && routeToken) {
+			return { token: routeToken, view: 'verify-email' };
+		}
+
+		return { token: null, view: 'auth' };
+	})();
+
 	const [showAnalytics, setShowAnalytics] = useState(false);
 	const {
 		user,
@@ -36,35 +53,39 @@ export default function App() {
 		logout
 	} = useAuth();
 
-	// Check URL for reset/verify token on mount
-	const [urlToken, setUrlToken] = useState(null);
-	
+	const [urlToken, setUrlToken] = useState(initialRouteState.token);
+
 	useEffect(() => {
-		const params = new URLSearchParams(window.location.search);
-		const resetToken = params.get('token');
-		const path = window.location.pathname;
-		
-		if (path.includes('reset-password') && resetToken) {
-			setUrlToken(resetToken);
-			setAuthView('reset-password');
-		} else if (path.includes('verify-email') && resetToken) {
-			setUrlToken(resetToken);
-			setAuthView('verify-email');
+		if (initialRouteState.view !== 'auth') {
+			setAuthView(initialRouteState.view);
 		}
-	}, [setAuthView]);
+	}, [initialRouteState.view, setAuthView]);
 
 	const clearUrlAndGoToAuth = () => {
 		window.history.pushState({}, '', '/');
 		setUrlToken(null);
 		setAuthView('auth');
+		setIsSignup(false); // Always go to login view, not signup
 	};
 
 	/* ---------- TOAST ---------- */
 	const [toast, setToast] = useState(null);
-	const showToast = (message, type = 'error') => {
+	const toastTimeoutRef = useRef(null);
+	const showToast = useCallback((message, type = 'error') => {
 		setToast({ message, type });
-		setTimeout(() => setToast(null), 3000);
-	};
+		if (toastTimeoutRef.current) {
+			clearTimeout(toastTimeoutRef.current);
+		}
+		toastTimeoutRef.current = setTimeout(() => setToast(null), 3000);
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			if (toastTimeoutRef.current) {
+				clearTimeout(toastTimeoutRef.current);
+			}
+		};
+	}, []);
 
 	/* ---------- SEARCH ---------- */
 	const {
@@ -89,6 +110,8 @@ export default function App() {
 		categories,
 		totalPages,
 		paginatedResults,
+		hasMoreResults,
+		isLoadingMore,
 		search
 	} = useSearch(user, showToast);
 
@@ -109,7 +132,6 @@ export default function App() {
 
 	/* ---------- PRODUCT DETAIL MODAL ---------- */
 	const [selectedProduct, setSelectedProduct] = useState(null);
-	
 	if (!user) {
 		// Handle different auth views
 		if (authView === 'forgot-password') {
@@ -119,7 +141,6 @@ export default function App() {
 				/>
 			);
 		}
-		
 		if (authView === 'reset-password') {
 			return (
 				<ResetPassword
@@ -129,7 +150,6 @@ export default function App() {
 				/>
 			);
 		}
-		
 		if (authView === 'verify-email') {
 			return (
 				<VerifyEmail
@@ -139,7 +159,6 @@ export default function App() {
 				/>
 			);
 		}
-		
 		return (
 			<AuthForm
 				isSignup={isSignup}
@@ -204,7 +223,8 @@ export default function App() {
 
 			{/* Toast Notification */}
 			<Toast toast={toast} />
-
+			{/* Admin Cache Manager (only visible to admins) */}
+			<AdminCacheManager />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}
@@ -270,10 +290,10 @@ export default function App() {
 										</button>
 										<span>Page {currentPage} of {totalPages}</span>
 										<button
-											onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-											disabled={currentPage === totalPages}
+											onClick={() => setCurrentPage(p => p + 1)}
+											disabled={!hasMoreResults && currentPage === totalPages}
 										>
-											Next →
+											{isLoadingMore ? 'Loading…' : 'Next →'}
 										</button>
 									</div>
 								</>
