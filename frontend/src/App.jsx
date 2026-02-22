@@ -224,7 +224,7 @@ export default function App() {
 			{/* Toast Notification */}
 			<Toast toast={toast} />
 			{/* Admin Cache Manager (only visible to admins) */}
-			<AdminCacheManager />
+			<AdminCacheManager user={user} />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}
@@ -290,8 +290,8 @@ export default function App() {
 										</button>
 										<span>Page {currentPage} of {totalPages}</span>
 										<button
-											onClick={() => setCurrentPage(p => p + 1)}
-											disabled={!hasMoreResults && currentPage === totalPages}
+											onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+											disabled={isLoadingMore || (!hasMoreResults && currentPage === totalPages)}
 										>
 											{isLoadingMore ? 'Loading…' : 'Next →'}
 										</button>

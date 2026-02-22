@@ -98,7 +98,7 @@ export function useSearch(user, showToast) {
         if (!hasMoreResults || nextCursor === null || searchLoading || isLoadingMore) return;
 
         const requiredCount = currentPage * ITEMS_PER_PAGE;
-        if (results.length >= requiredCount) return;
+        if (filteredResults.length >= requiredCount) return;
 
         let cancelled = false;
 
@@ -125,6 +125,7 @@ export function useSearch(user, showToast) {
     }, [
         currentPage,
         results,
+        filteredResults,
         hasMoreResults,
         nextCursor,
         searchLoading,
