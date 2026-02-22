@@ -25,7 +25,7 @@ function AdminCacheManager({ user }) {
       setAdminInfo(null);
       return;
     }
-    
+
     const checkAdminStatus = async () => {
       try {
         const data = await fetchAdminCacheDashboard(user.user_id);
@@ -34,7 +34,10 @@ function AdminCacheManager({ user }) {
         setCacheStats(data.cache);
         setLastUpdated(new Date());
       } catch (error) {
-        console.error('Admin check failed:', error);
+        // Suppress 403 errors - non-admins are expected to fail silently
+        if (!error.message.includes('Admin access required')) {
+          console.error('Admin check failed:', error);
+        }
         setIsAdmin(false);
       }
     };
@@ -77,7 +80,7 @@ function AdminCacheManager({ user }) {
 
   const handleResetStats = async () => {
     if (!confirm('Reset cache statistics? This cannot be undone.')) return;
-    
+
     setLoading(true);
     try {
       await resetCacheStats(user.user_id);

@@ -6,7 +6,7 @@ Provides admin endpoints for:
 - Manual cache invalidation
 - Cache maintenance operations
 
-All endpoints require admin user email (from ADMIN_EMAILS env var).
+All endpoints require admin user ID (from ADMIN_USER_IDS env var).
 Users authenticate by passing X-User-ID header with their user_id.
 """
 
@@ -26,39 +26,26 @@ from backend.services.db_user_manager import get_user_by_id
 
 bp = Blueprint("cache", __name__, url_prefix="/api/admin/cache")
 
-# Admin email whitelist (comma-separated env var)
-ADMIN_EMAILS = os.getenv("ADMIN_EMAILS", "").lower().split(",")
-ADMIN_EMAILS = [email.strip() for email in ADMIN_EMAILS if email.strip()]
-
-# Shared secret API key required for all admin cache routes
-ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
-
+# Admin user IDs whitelist (comma-separated env var)
+ADMIN_USER_IDS = os.getenv("ADMIN_USER_IDS", "").split(",")
+ADMIN_USER_IDS = [uid.strip() for uid in ADMIN_USER_IDS if uid.strip()]
 
 def require_admin(f):
     """Decorator: Require authenticated admin user (email in ADMIN_EMAILS)."""
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Require a non-spoofable admin API key in addition to user ID
-        if not ADMIN_API_KEY:
-            return jsonify({"error": "Admin API key not configured"}), 500
-        api_key = request.headers.get("X-Admin-API-Key")
-        if api_key != ADMIN_API_KEY:
-            return jsonify({"error": "Invalid or missing admin API key"}), 401
-
         user_id = request.headers.get("X-User-ID")
-
         if not user_id:
             return jsonify({"error": "Missing X-User-ID header"}), 401
+
+        # Check if user_id is in admin list
+        if user_id not in ADMIN_USER_IDS:
+            return jsonify({"error": "Admin access required"}), 403
 
         # Fetch user from database
         user = get_user_by_id(user_id)
         if not user:
             return jsonify({"error": "User not found"}), 401
-
-        # Check if user's email is in admin list
-        user_email = (user.email or "").lower()
-        if user_email not in ADMIN_EMAILS:
-            return jsonify({"error": "Admin access required"}), 403
 
         # Store user in flask.g for the request context
         g.admin_user = user
