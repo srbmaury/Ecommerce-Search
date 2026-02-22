@@ -209,13 +209,12 @@ REDIS_URL=redis://localhost:6379/0
 
 To enable account verification & password reset:
 
-```
-EMAIL_HOST=smtp.example.com
-EMAIL_PORT=587
-EMAIL_HOST_USER=your@email.com
-EMAIL_HOST_PASSWORD=yourpassword
-EMAIL_USE_TLS=True
-EMAIL_FROM=your@email.com
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@email.com
+SMTP_PASSWORD=yourpassword
+SMTP_FROM_EMAIL=noreply@yourdomain.com
 FRONTEND_URL=http://localhost:5173
 ```
 
@@ -226,7 +225,37 @@ Use a production SMTP provider:
 
 ---
 
-## 5️⃣ Start Required Services
+## 5️⃣ Frontend Environment Configuration
+
+Create `frontend/.env.local`:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000/api
+```
+
+This tells the React frontend where the backend API is located.
+
+---
+
+## 6️⃣ Admin Dashboard Configuration (Optional)
+
+To enable admin cache management for specific users:
+
+```env
+ADMIN_USER_IDS=user-id-1,user-id-2,user-id-3
+```
+
+Admin users can:
+- View cache statistics and hit rates
+- Manually invalidate search caches
+- Invalidate recommendation caches
+- Reset cache statistics
+
+Only users whose `user_id` matches `ADMIN_USER_IDS` can access admin endpoints.
+
+---
+
+## 7️⃣ Start Required Services
 
 Ensure:
 
@@ -237,7 +266,7 @@ are running.
 
 ---
 
-## 6️⃣ Run the Backend
+## 8️⃣ Run the Backend
 ```bash
 python -m backend.app
 ```
@@ -251,7 +280,7 @@ Tables and `tsvector` columns auto-create on first run.
 
 ---
 
-## 7️⃣ Populate Database (Optional for Testing)
+## 9️⃣ Populate Database (Optional for Testing)
 
 ### Generate Fake Data
 ```bash
@@ -262,7 +291,7 @@ Or import your own product dataset.
 
 ---
 
-## 8️⃣ Start Background Worker (Required for Full Functionality)
+## 🔟 Start Background Worker (Required for Full Functionality)
 ```bash
 python -m backend.worker
 ```
@@ -274,7 +303,7 @@ Handles:
 
 ---
 
-## 9️⃣ Train ML Models (Optional Manual Trigger)
+## 1️⃣1️⃣ Train ML Models (Optional Manual Trigger)
 
 ```bash
 python -m ml.train_ranker
@@ -283,7 +312,7 @@ python -m ml.assign_user_clusters
 
 ---
 
-## 🔟 Run the Frontend
+## 1️⃣2️⃣ Run the Frontend
 ```bash
 cd frontend
 npm install
@@ -381,12 +410,36 @@ Displays:
 
 ---
 
+## 🔧 Admin Cache Management
+- View real-time cache statistics & hit rates
+- Monitor cache performance
+- Manually invalidate search caches
+- Manually invalidate recommendation caches
+- Reset cache statistics
+- Admin user IDs controlled via `ADMIN_USER_IDS` env var
+
+---
+
 ## ⚡ Performance Optimizations
 
+### Search: Cursor-Based Pagination
+- Efficient result set navigation
+- Stateless pagination (cursor = offset + product_id)
+- Prevents "skip=999999" performance issues
+- Ranked result caching per cursor
+
+Usage:
+```javascript
+// Frontend
+searchProducts(query, userId, { cursor: 0, limit: 20 })
+```
+
 ### Caching
-- Redis query cache (5 minutes)
-- Product cache
+- Redis query cache (5 minutes TTL)
+- Ranked search result caching
+- Product attribute cache
 - Session cache
+- Cache invalidation on product updates
 
 ### Database Optimization
 - Indexed columns
