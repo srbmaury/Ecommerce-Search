@@ -22,7 +22,7 @@ load_dotenv()
 
 # ---------- CONFIG ----------
 
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 QUEUE_NAME = "ml-retrain"
 JOB_TIMEOUT_SECONDS = 60 * 60          # 1 hour hard timeout
@@ -39,6 +39,9 @@ logger = logging.getLogger("retrain_worker")
 redis_conn = redis.from_url(
     REDIS_URL,
     decode_responses=True,
+    socket_connect_timeout=1,
+    socket_timeout=1,
+    retry_on_timeout=True,
 )
 
 queue = Queue(

@@ -13,14 +13,20 @@ load_dotenv()
 
 # ---------- CONFIG ----------
 
-QUEUE_NAMES = os.getenv("RQ_QUEUES", "default").split(",")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+QUEUE_NAMES = os.getenv("RQ_QUEUES", "default,ml-retrain").split(",")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 
 # ---------- WORKER ----------
 
 def main():
-    redis_conn = redis.from_url(REDIS_URL)
+    redis_conn = redis.from_url(
+        REDIS_URL,
+        decode_responses=True,
+        socket_connect_timeout=1,
+        socket_timeout=1,
+        retry_on_timeout=True,
+    )
 
     queues = [Queue(name.strip(), connection=redis_conn) for name in QUEUE_NAMES]
 

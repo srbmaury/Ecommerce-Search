@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { searchProducts, fetchRecommendations } from './api';
+import { useApiToast } from './useApiToast';
 
 export function useSearch(user, showToast) {
+    const { toastApiError } = useApiToast(showToast);
+
     // Search state
     const [query, setQuery] = useState('');
     const [results, setResults] = useState(null); // IMPORTANT: null vs []
@@ -17,9 +20,44 @@ export function useSearch(user, showToast) {
     const [maxPrice, setMaxPrice] = useState('');
     const [sortBy, setSortBy] = useState('');
     const [currentPage, setCurrentPage] = useState(1);
+    const [nextCursor, setNextCursor] = useState(null);
+    const [hasMoreResults, setHasMoreResults] = useState(false);
+    const [isLoadingMore, setIsLoadingMore] = useState(false);
 
     const ITEMS_PER_PAGE = 12;
+    const SEARCH_PAGE_SIZE = 60;
     const categories = ['Audio', 'Electronics', 'Computers', 'Photography', 'Accessories', 'Gaming', 'Networking', 'Smart Home', 'Storage'];
+
+    const loadSearchPage = useCallback(async (cursor, append = false) => {
+        const data = await searchProducts(query, user.user_id, {
+            cursor,
+            limit: SEARCH_PAGE_SIZE,
+        });
+
+        const products = Array.isArray(data) ? data : (data.products || []);
+
+        if (append) {
+            setResults(prev => {
+                const existing = Array.isArray(prev) ? prev : [];
+                const existingIds = new Set(existing.map(p => p.product_id));
+                const merged = [...existing];
+                products.forEach((product) => {
+                    if (!existingIds.has(product.product_id)) {
+                        merged.push(product);
+                    }
+                });
+                return merged;
+            });
+        } else {
+            setResults(products);
+        }
+
+        const pagination = data.pagination || {};
+        setNextCursor(pagination.next_cursor ?? null);
+        setHasMoreResults(Boolean(pagination.has_more));
+
+        return data;
+    }, [query, user?.user_id]);
 
     // Search function
     const search = useCallback(async (e) => {
@@ -27,10 +65,11 @@ export function useSearch(user, showToast) {
         if (!user?.user_id) return;
         setSearchLoading(true);
         setCurrentPage(1);
+        setNextCursor(null);
+        setHasMoreResults(false);
         try {
-            const data = await searchProducts(query, user.user_id);
+            const data = await loadSearchPage(0, false);
             let products = Array.isArray(data) ? data : (data.products || []);
-            setResults(products);
             if (data.intent) {
                 const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
                 const newCategory = (suggested_category && products.some(p => p.category === suggested_category)) ? suggested_category : '';
@@ -47,12 +86,53 @@ export function useSearch(user, showToast) {
                     showToast(`Applied: ${intentMsg}`, 'success');
                 }
             }
-        } catch {
-            showToast('Network error. Please check your connection.');
+        } catch (error) {
+            toastApiError(error);
         } finally {
             setSearchLoading(false);
         }
-    }, [query, user?.user_id, showToast]);
+    }, [user?.user_id, showToast, loadSearchPage, toastApiError]);
+
+    useEffect(() => {
+        if (!results || results.length === 0) return;
+        if (!hasMoreResults || nextCursor === null || searchLoading || isLoadingMore) return;
+
+        const requiredCount = currentPage * ITEMS_PER_PAGE;
+        if (filteredResults.length >= requiredCount) return;
+
+        let cancelled = false;
+
+        const loadMore = async () => {
+            setIsLoadingMore(true);
+            try {
+                await loadSearchPage(nextCursor, true);
+            } catch (error) {
+                if (!cancelled) {
+                    toastApiError(error, 'Failed to load more results');
+                }
+            } finally {
+                if (!cancelled) {
+                    setIsLoadingMore(false);
+                }
+            }
+        };
+
+        loadMore();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        currentPage,
+        results,
+        filteredResults,
+        hasMoreResults,
+        nextCursor,
+        searchLoading,
+        isLoadingMore,
+        loadSearchPage,
+        toastApiError,
+    ]);
 
     // Apply filters and sorting to results
     useEffect(() => {
@@ -96,15 +176,20 @@ export function useSearch(user, showToast) {
                 setRecent(d.recent || []);
                 setRecommended(d.similar || []);
             })
-            .catch(() => {
+            .catch((error) => {
+                toastApiError(error, 'Failed to load recommendations');
                 setRecent([]);
                 setRecommended([]);
             })
             .finally(() => setRecsLoading(false));
-    }, [user]);
+    }, [user, toastApiError]);
 
     // Pagination calculations
-    const totalPages = useMemo(() => Math.ceil(filteredResults.length / ITEMS_PER_PAGE), [filteredResults.length]);
+    const totalPages = useMemo(() => {
+        const loadedPages = Math.ceil(filteredResults.length / ITEMS_PER_PAGE);
+        const minimumPages = Math.max(1, loadedPages);
+        return hasMoreResults ? minimumPages + 1 : minimumPages;
+    }, [filteredResults.length, hasMoreResults]);
     const paginatedResults = useMemo(() =>
         filteredResults.slice(
             (currentPage - 1) * ITEMS_PER_PAGE,
@@ -142,6 +227,8 @@ export function useSearch(user, showToast) {
         // Computed values
         totalPages,
         paginatedResults,
+        hasMoreResults,
+        isLoadingMore,
 
         // Functions
         search

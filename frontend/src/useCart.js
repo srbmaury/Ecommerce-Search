@@ -1,7 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { fetchCart, updateCart, clearCart } from './api';
+import { useApiToast } from './useApiToast';
 
 export function useCart(user, showToast) {
+    const { toastApiError } = useApiToast(showToast);
+
     const [cart, setCart] = useState([]);
     const [cartCount, setCartCount] = useState(0);
     const [cartTotal, setCartTotal] = useState(0);
@@ -85,7 +88,7 @@ export function useCart(user, showToast) {
             updateCart(user.user_id, productId, netQuantity)
                 .then(() => fetchCartData())
                 .catch(err => {
-                    if (showToast) showToast(err.message || 'Cart update failed', 'error');
+                    toastApiError(err, 'Cart update failed');
                     fetchCartData();
                 });
         }, 300);
@@ -101,6 +104,8 @@ export function useCart(user, showToast) {
         try {
             await clearCart(user.user_id);
             await fetchCartData();
+        } catch (error) {
+            toastApiError(error, 'Failed to clear cart');
         } finally {
             setClearCartLoading(false);
         }
