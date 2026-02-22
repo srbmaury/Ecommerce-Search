@@ -64,8 +64,10 @@ def get_profiles():
     # Return stale cache while background refresh happens
     if _state.profiles is not None:
         # Trigger async refresh in background (don't block)
-        if not _state.refresh_in_progress:
-            _trigger_async_refresh()
+        with _state.lock:
+            if not _state.refresh_in_progress:
+                _state.refresh_in_progress = True
+                _trigger_async_refresh()
         return _state.profiles  # Return stale, not empty ✓
     
     # First load: must block to get initial data
@@ -94,12 +96,8 @@ def refresh_profiles():
 def _trigger_async_refresh():
     """
     Trigger background refresh without blocking.
-    Multiple simultaneous refreshes are prevented by flag.
+    Multiple simultaneous refreshes are prevented by flag (set by caller under lock).
     """
-    if _state.refresh_in_progress:
-        return
-    
-    _state.refresh_in_progress = True
     thread = threading.Thread(
         target=_background_refresh,
         daemon=True,

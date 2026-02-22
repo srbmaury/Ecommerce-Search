@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from './useAuth';
 import { fetchAdminCacheDashboard, invalidateCacheEndpoint, resetCacheStats } from './api';
 import Toast from './Toast';
 
@@ -9,8 +8,7 @@ import Toast from './Toast';
  * Only visible to users with email in ADMIN_EMAILS env var
  * Provides a professional interface for cache monitoring and management
  */
-function AdminCacheManager() {
-  const { user } = useAuth();
+function AdminCacheManager({ user }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [cacheStats, setCacheStats] = useState(null);
@@ -21,7 +19,12 @@ function AdminCacheManager() {
 
   // Check if user is admin and load initial data
   useEffect(() => {
-    if (!user?.user_id) return;
+    if (!user?.user_id) {
+      setIsAdmin(false);
+      setCacheStats(null);
+      setAdminInfo(null);
+      return;
+    }
     
     const checkAdminStatus = async () => {
       try {
@@ -223,7 +226,7 @@ function AdminCacheManager() {
         </div>
       )}
 
-      {toast && <Toast message={toast.message} type={toast.type} />}
+      {toast && <Toast toast={toast} />}
     </>
   );
 }

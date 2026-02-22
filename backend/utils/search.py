@@ -150,7 +150,7 @@ def search_products(
                 "category": r.category,
                 "rating": float(r.rating),
                 "popularity": float(r.popularity),
-                "created_at": r.created_at,
+                "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at),
             }
             for _, r in products_df.iterrows()
         ]

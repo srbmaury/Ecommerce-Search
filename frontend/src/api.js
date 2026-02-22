@@ -1,6 +1,8 @@
 
 import API_BASE_URL from './config';
 
+const ADMIN_API_KEY = import.meta.env.VITE_ADMIN_API_KEY || '';
+
 function buildUrl(path, params = {}) {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -154,7 +156,7 @@ export async function logEvent(eventType, productId, query, userId) {
 // Admin Cache Management APIs
 export async function fetchAdminCacheDashboard(userId) {
     const res = await fetch(buildUrl('/admin/cache/dashboard'), {
-        headers: { 'X-User-ID': userId }
+        headers: { 'X-User-ID': userId, 'X-Admin-API-Key': ADMIN_API_KEY }
     });
     return handleResponse(res, 'Failed to fetch admin cache dashboard');
 }
@@ -162,7 +164,7 @@ export async function fetchAdminCacheDashboard(userId) {
 export async function invalidateCacheEndpoint(endpoint, userId) {
     const res = await fetch(`${API_BASE_URL}/admin/cache/${endpoint}`, {
         method: 'POST',
-        headers: { 'X-User-ID': userId }
+        headers: { 'X-User-ID': userId, 'X-Admin-API-Key': ADMIN_API_KEY }
     });
     return handleResponse(res, 'Failed to invalidate cache');
 }
@@ -170,7 +172,7 @@ export async function invalidateCacheEndpoint(endpoint, userId) {
 export async function resetCacheStats(userId) {
     const res = await fetch(`${API_BASE_URL}/admin/cache/reset-stats`, {
         method: 'POST',
-        headers: { 'X-User-ID': userId }
+        headers: { 'X-User-ID': userId, 'X-Admin-API-Key': ADMIN_API_KEY }
     });
     return handleResponse(res, 'Failed to reset cache stats');
 }
