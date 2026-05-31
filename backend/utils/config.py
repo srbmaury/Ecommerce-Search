@@ -72,7 +72,7 @@ def get_database_url():
         db_path = (
             Path(__file__)
             .resolve()
-            .parent.parent
+            .parents[2]
             / "data"
             / "ecommerce.db"
         )
