@@ -6,7 +6,7 @@ def search_products_by_category(category, limit=50):
     with get_db_session() as session:
         return (
             session.query(Product)
-            .filter(Product.category.ilike(f"%{category}%"))
+            .filter(Product.category == category)
             .order_by(desc(Product.popularity))
             .limit(limit)
             .all()

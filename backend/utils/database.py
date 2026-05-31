@@ -8,7 +8,7 @@ Responsibilities:
 """
 
 import logging
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import Engine
 
@@ -88,7 +88,31 @@ def create_tables():
 
     logger.info("Creating database tables")
     Base.metadata.create_all(bind=_engine)
+    _refresh_product_search_vectors()
     logger.info("Database tables created")
+
+
+def _refresh_product_search_vectors():
+    """
+    Backfill product full-text vectors for PostgreSQL deployments.
+
+    SQLite local development ignores the tsvector column, so this is skipped
+    outside Postgres.
+    """
+    if _engine is None or _engine.dialect.name != "postgresql":
+        return
+
+    statement = text("""
+        UPDATE products
+        SET search_vector =
+            setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
+            setweight(to_tsvector('english', coalesce(category, '')), 'B') ||
+            setweight(to_tsvector('english', coalesce(description, '')), 'C')
+        WHERE search_vector IS NULL
+    """)
+
+    with _engine.begin() as conn:
+        conn.execute(statement)
 
 
 # ---------- SESSION ACCESS ----------
