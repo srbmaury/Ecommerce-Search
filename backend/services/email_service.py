@@ -1,13 +1,17 @@
 """
 Email service for sending verification and password reset emails.
 
-Supports SMTP or can be extended for services like SendGrid, Mailgun, etc.
+Transport priority:
+  1. Resend API (RESEND_API_KEY set) — works on cloud hosts like Render
+  2. SMTP (SMTP_USER + SMTP_PASSWORD set) — works in local dev
+  3. Log-only fallback — dev mode with no credentials configured
 """
 
 import os
 import logging
 import smtplib
 import secrets
+import requests as http_requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
@@ -25,6 +29,8 @@ logger = logging.getLogger("email_service")
 
 
 # ---------- CONFIG ----------
+
+RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 
 SMTP_HOST = os.getenv("SMTP_HOST", "localhost")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
@@ -229,43 +235,76 @@ def use_password_reset_token(token: str) -> bool:
 
 # ---------- EMAIL SENDING ----------
 
-def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
-    """
-    Send an email via SMTP.
-    Returns True if successful, False otherwise.
-    """
-    # If SMTP is not configured, log the email instead
-    if not SMTP_USER or not SMTP_PASSWORD:
-        logger.warning(
-            "SMTP not configured. Email would have been sent:\n"
-            f"To: {to_email}\n"
-            f"Subject: {subject}\n"
-            f"Body: {text_body}"
+def _send_via_resend(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+    """Send via Resend HTTPS API — works on cloud hosts that block SMTP."""
+    try:
+        response = http_requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "from": f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>",
+                "to": [to_email],
+                "subject": subject,
+                "html": html_body,
+                "text": text_body,
+            },
+            timeout=10,
         )
-        # Return True in dev mode to allow testing
-        return True
-    
+        if response.status_code == 200 or response.status_code == 201:
+            logger.info("Email sent via Resend to %s", to_email)
+            return True
+        logger.error("Resend API error %s: %s", response.status_code, response.text)
+        return False
+    except Exception:
+        logger.exception("Failed to send email via Resend to %s", to_email)
+        return False
+
+
+def _send_via_smtp(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+    """Send via SMTP — suitable for local development."""
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
         msg["To"] = to_email
-        
+
         msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(html_body, "html"))
-        
+
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
             if SMTP_USE_TLS:
                 server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.sendmail(SMTP_FROM_EMAIL, to_email, msg.as_string())
-        
-        logger.info(f"Email sent to {to_email}")
+
+        logger.info("Email sent via SMTP to %s", to_email)
         return True
-        
-    except Exception as e:
-        logger.exception(f"Failed to send email to {to_email}")
+    except Exception:
+        logger.exception("Failed to send email via SMTP to %s", to_email)
         return False
+
+
+def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
+    """
+    Send an email using exactly one transport (mutually exclusive):
+      - Resend API if RESEND_API_KEY is set (production)
+      - SMTP if SMTP_USER + SMTP_PASSWORD are set (local dev)
+      - Log-only fallback otherwise
+    """
+    if RESEND_API_KEY:
+        return _send_via_resend(to_email, subject, html_body, text_body)
+    elif SMTP_USER and SMTP_PASSWORD:
+        return _send_via_smtp(to_email, subject, html_body, text_body)
+    else:
+        logger.warning(
+            "No email transport configured. Email not sent.\n"
+            "To: %s | Subject: %s\nBody: %s",
+            to_email, subject, text_body,
+        )
+        return True
 
 
 def send_verification_email(email: str, username: str, token: str) -> bool:
