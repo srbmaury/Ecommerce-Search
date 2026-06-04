@@ -207,7 +207,32 @@ REDIS_URL=redis://localhost:6379/0
 
 ## 4️⃣ Email Verification Configuration (Optional but Recommended)
 
-To enable account verification & password reset:
+Exactly one transport is used — whichever is configured first in this order:
+
+| Priority | Transport | Condition |
+|----------|-----------|-----------|
+| 1 | **Resend API** | `RESEND_API_KEY` is set |
+| 2 | **SMTP** | `SMTP_USER` + `SMTP_PASSWORD` set |
+| 3 | Log-only fallback | Neither set |
+
+If both `RESEND_API_KEY` and SMTP credentials are present, only Resend is used.
+
+### Production (Render / any cloud host)
+
+Cloud hosts block outbound SMTP. Use [Resend](https://resend.com) instead (free tier: 3,000 emails/month):
+
+1. Sign up at resend.com and get an API key
+2. Verify your sender email or domain
+3. Set in your environment:
+
+```env
+RESEND_API_KEY=re_your_api_key
+SMTP_FROM_EMAIL=noreply@yourdomain.com
+SMTP_FROM_NAME=Ecommerce Search
+FRONTEND_URL=https://your-app.onrender.com
+```
+
+### Local Development (SMTP)
 
 ```env
 SMTP_HOST=smtp.gmail.com
@@ -218,12 +243,7 @@ SMTP_FROM_EMAIL=your@gmail.com
 FRONTEND_URL=http://localhost:5173
 ```
 
-> **Gmail users**: `SMTP_FROM_EMAIL` must match `SMTP_USER`. Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your regular password.
-
-Use a production SMTP provider:
-- Gmail (app password required)
-- SendGrid
-- Mailgun
+> **Gmail**: `SMTP_FROM_EMAIL` must match `SMTP_USER`. Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your account password.
 
 ---
 
