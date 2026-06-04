@@ -116,6 +116,7 @@ body {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
+    margin-left: auto;
 }
 
 .cart-btn {

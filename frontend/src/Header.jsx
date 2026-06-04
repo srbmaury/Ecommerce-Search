@@ -10,12 +10,14 @@ export default function Header({
 }) {
     return (
         <header className="topbar">
-            <button
-                className="analytics-btn"
-                onClick={onShowAnalytics}
-            >
-                📊 Analytics Dashboard
-            </button>
+            {onShowAnalytics && (
+                <button
+                    className="analytics-btn"
+                    onClick={onShowAnalytics}
+                >
+                    📊 Analytics Dashboard
+                </button>
+            )}
             <div className="topbar-right">
                 <button
                     className="cart-btn"

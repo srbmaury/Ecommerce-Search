@@ -8,7 +8,7 @@ import Toast from './Toast';
  * Only visible to users with email in ADMIN_EMAILS env var
  * Provides a professional interface for cache monitoring and management
  */
-function AdminCacheManager({ user }) {
+function AdminCacheManager({ user, onAdminConfirmed }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [cacheStats, setCacheStats] = useState(null);
@@ -30,6 +30,7 @@ function AdminCacheManager({ user }) {
       try {
         const data = await fetchAdminCacheDashboard(user.user_id);
         setIsAdmin(true);
+        onAdminConfirmed?.();
         setAdminInfo(data.admin);
         setCacheStats(data.cache);
         setLastUpdated(new Date());

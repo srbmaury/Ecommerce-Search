@@ -10,8 +10,13 @@ Responsibilities:
 """
 import os
 import logging
-from flask import Flask
 from dotenv import load_dotenv
+
+# Load .env before any other backend imports so module-level os.getenv() calls
+# in services (e.g. email_service, database) see the correct values.
+load_dotenv()
+
+from flask import Flask
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.utils.response_time_logger import setup_response_time_logging
@@ -27,9 +32,7 @@ from backend.routes.recommendations_routes import bp as rec_bp
 from backend.routes.cache_routes import bp as cache_bp
 
 
-# ---------- ENV & LOGGING ----------
-
-load_dotenv()
+# ---------- LOGGING ----------
 
 logging.basicConfig(
     level=logging.INFO,

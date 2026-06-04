@@ -3,7 +3,7 @@ import { login, signup } from './api';
 
 export function useAuth() {
     const [user, setUser] = useState(() => {
-        const saved = localStorage.getItem('user');
+        const saved = sessionStorage.getItem('user');
         return saved ? JSON.parse(saved) : null;
     });
     const [isSignup, setIsSignup] = useState(true);
@@ -15,11 +15,11 @@ export function useAuth() {
     const [authView, setAuthView] = useState('auth'); // 'auth', 'forgot-password', 'reset-password', 'verify-email'
 
     useEffect(() => {
-        if (user) localStorage.setItem('user', JSON.stringify(user));
+        if (user) sessionStorage.setItem('user', JSON.stringify(user));
     }, [user]);
 
     const logout = () => {
-        localStorage.removeItem('user');
+        sessionStorage.removeItem('user');
         setUser(null);
     };
 
