@@ -1,5 +1,10 @@
+import logging
 import threading
 from backend.utils.sanitize import sanitize_user_id
+
+logger = logging.getLogger("cart_controller")
+
+MAX_QUANTITY_PER_UPDATE = 100
 from backend.services.db_user_manager import (
     get_user_by_id
 )
@@ -54,11 +59,11 @@ def _log_cart_analytics(user_id, product_id, query, group):
             group=group,
         )
     except Exception:
-        pass
+        logger.warning("Failed to log cart event for user=%s product=%s", user_id, product_id, exc_info=True)
     try:
         update_product_popularity(product_id, 3)
     except Exception:
-        pass
+        logger.warning("Failed to update product popularity for product=%s", product_id, exc_info=True)
     record_event()
 
 
@@ -68,11 +73,19 @@ def update_cart_controller(data):
     """
     raw_user_id = data.get("user_id")
     product_id = data.get("product_id")
-    quantity = data.get("quantity", 1)
+    raw_quantity = data.get("quantity", 1)
     query = data.get("query", "")
 
     if not product_id:
         return error_response("product_id required")
+
+    try:
+        quantity = int(raw_quantity)
+    except (TypeError, ValueError):
+        return error_response("quantity must be an integer")
+
+    if abs(quantity) > MAX_QUANTITY_PER_UPDATE:
+        return error_response(f"quantity cannot exceed {MAX_QUANTITY_PER_UPDATE} per update")
 
     user, error = get_valid_user(raw_user_id)
     if error:
@@ -162,6 +175,7 @@ def clear_cart_controller(data):
     try:
         clear_cart(user.user_id)
     except Exception:
-        pass
+        logger.warning("Failed to clear cart for user=%s", user.user_id, exc_info=True)
+        return error_response("Failed to clear cart", 500)
 
     return {"status": "cart cleared"}, 200

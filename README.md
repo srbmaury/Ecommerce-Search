@@ -212,14 +212,16 @@ To enable account verification & password reset:
 ```env
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=your@email.com
-SMTP_PASSWORD=yourpassword
-SMTP_FROM_EMAIL=noreply@yourdomain.com
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM_EMAIL=your@gmail.com
 FRONTEND_URL=http://localhost:5173
 ```
 
+> **Gmail users**: `SMTP_FROM_EMAIL` must match `SMTP_USER`. Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your regular password.
+
 Use a production SMTP provider:
-- Gmail
+- Gmail (app password required)
 - SendGrid
 - Mailgun
 
@@ -239,19 +241,31 @@ This tells the React frontend where the backend API is located.
 
 ## 6️⃣ Admin Dashboard Configuration (Optional)
 
-To enable admin cache management for specific users:
+To enable admin cache management and analytics for specific users, set both variables in **backend `.env`**:
 
 ```env
-ADMIN_USER_IDS=user-id-1,user-id-2,user-id-3
+ADMIN_USER_IDS=your-user-id
+ADMIN_SECRET=your-random-secret
+```
+
+Generate a secret with:
+```bash
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+
+And the matching secret in **frontend `.env.local`**:
+
+```env
+VITE_ADMIN_SECRET=same-value-as-ADMIN_SECRET
 ```
 
 Admin users can:
-- View cache statistics and hit rates
+- View real-time cache statistics & hit rates
 - Manually invalidate search caches
 - Invalidate recommendation caches
 - Reset cache statistics
 
-Only users whose `user_id` matches `ADMIN_USER_IDS` can access admin endpoints.
+Access requires **both** a user ID listed in `ADMIN_USER_IDS` **and** the matching `X-Admin-Secret` header (sent automatically by the frontend via `VITE_ADMIN_SECRET`).
 
 ---
 
@@ -386,27 +400,19 @@ python -m ml.analytics
 
 ---
 
-## 📊 Analytics Dashboard
-
-Route:
-```
-/analytics
-```
-
-Displays:
-- CTR
-- Conversion rate
-- A/B performance
-- Cluster distribution
-- Top queries
-
----
-
 ## 🛒 Shopping Cart
 - Add/remove items
 - Persistent per-user storage
 - Real-time totals
 - Cart clearing
+
+---
+
+## 📊 Analytics Dashboard
+- A/B experiment group metrics (CTR, conversion rates)
+- Top search queries
+- User cluster distribution
+- Visible to all logged-in users
 
 ---
 
@@ -416,7 +422,7 @@ Displays:
 - Manually invalidate search caches
 - Manually invalidate recommendation caches
 - Reset cache statistics
-- Admin user IDs controlled via `ADMIN_USER_IDS` env var
+- Admin-only (requires `ADMIN_USER_IDS` + `ADMIN_SECRET`)
 
 ---
 

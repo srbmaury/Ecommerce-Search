@@ -35,6 +35,7 @@ export default function App() {
 	})();
 
 	const [showAnalytics, setShowAnalytics] = useState(false);
+	const [isAdmin, setIsAdmin] = useState(false);
 	const {
 		user,
 		isSignup,
@@ -54,6 +55,11 @@ export default function App() {
 	} = useAuth();
 
 	const [urlToken, setUrlToken] = useState(initialRouteState.token);
+
+	// Reset admin state when user logs out
+	useEffect(() => {
+		if (!user) setIsAdmin(false);
+	}, [user]);
 
 	useEffect(() => {
 		if (initialRouteState.view !== 'auth') {
@@ -224,7 +230,7 @@ export default function App() {
 			{/* Toast Notification */}
 			<Toast toast={toast} />
 			{/* Admin Cache Manager (only visible to admins) */}
-			<AdminCacheManager user={user} />
+			<AdminCacheManager user={user} onAdminConfirmed={() => setIsAdmin(true)} />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}

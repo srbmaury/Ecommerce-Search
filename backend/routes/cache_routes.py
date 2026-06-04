@@ -6,13 +6,11 @@ Provides admin endpoints for:
 - Manual cache invalidation
 - Cache maintenance operations
 
-All endpoints require admin user ID (from ADMIN_USER_IDS env var).
-Users authenticate by passing X-User-ID header with their user_id.
+All endpoints require both X-User-ID (must be in ADMIN_USER_IDS) and
+X-Admin-Secret (must match ADMIN_SECRET env var) headers.
 """
 
-import os
-from functools import wraps
-from flask import Blueprint, jsonify, request, g
+from flask import Blueprint, jsonify, g
 
 from backend.services.cache_invalidation import (
     get_cache_stats,
@@ -22,35 +20,9 @@ from backend.services.cache_invalidation import (
     invalidate_all_recommendation_caches,
     invalidate_user_recommendations,
 )
-from backend.services.db_user_manager import get_user_by_id
+from backend.utils.admin_auth import require_admin
 
 bp = Blueprint("cache", __name__, url_prefix="/api/admin/cache")
-
-# Admin user IDs whitelist (comma-separated env var)
-ADMIN_USER_IDS = os.getenv("ADMIN_USER_IDS", "").split(",")
-ADMIN_USER_IDS = [uid.strip() for uid in ADMIN_USER_IDS if uid.strip()]
-
-def require_admin(f):
-    """Decorator: Require authenticated admin user (email in ADMIN_EMAILS)."""
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        user_id = request.headers.get("X-User-ID")
-        if not user_id:
-            return jsonify({"error": "Missing X-User-ID header"}), 401
-
-        # Check if user_id is in admin list
-        if user_id not in ADMIN_USER_IDS:
-            return jsonify({"error": "Admin access required"}), 403
-
-        # Fetch user from database
-        user = get_user_by_id(user_id)
-        if not user:
-            return jsonify({"error": "User not found"}), 401
-
-        # Store user in flask.g for the request context
-        g.admin_user = user
-        return f(*args, **kwargs)
-    return decorated_function
 
 
 @bp.route("/dashboard", methods=["GET"])

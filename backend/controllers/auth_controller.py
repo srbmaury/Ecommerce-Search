@@ -1,3 +1,4 @@
+import os
 import random
 import uuid
 import bcrypt
@@ -27,6 +28,12 @@ from backend.services.email_service import (
 
 
 EXPERIMENT_GROUPS = ("A", "B")
+
+ADMIN_USER_IDS = {uid.strip() for uid in os.getenv("ADMIN_USER_IDS", "").split(",") if uid.strip()}
+
+
+def is_admin(user_id: str) -> bool:
+    return user_id in ADMIN_USER_IDS
 
 
 # ---------- Helpers ----------
@@ -103,13 +110,20 @@ def signup_controller(data):
     # Send verification email if email provided
     if email:
         token = create_email_verification_token(user.user_id)
-        send_verification_email(email, username, token)
+        send_ok = send_verification_email(email, username, token)
+        if not send_ok:
+            return invalid_response(
+                "Account created but failed to send verification email. "
+                "Please use 'Resend verification' to try again.",
+                status=500,
+            )
 
     return jsonify({
         "user_id": user.user_id,
         "username": user.username,
         "group": user.group,
         "email_verified": user.email_verified,
+        "is_admin": is_admin(user.user_id),
     })
 
 
@@ -142,6 +156,7 @@ def login_controller(data):
         "username": user.username,
         "group": user.group,
         "email_verified": user.email_verified,
+        "is_admin": is_admin(user.user_id),
     })
 
 
@@ -186,8 +201,13 @@ def resend_verification_controller(data):
         return success_response("Email is already verified.")
     
     token = create_email_verification_token(user.user_id)
-    send_verification_email(email, user.username, token)
-    
+    send_ok = send_verification_email(email, user.username, token)
+    if not send_ok:
+        return invalid_response(
+            "Failed to send verification email. Please try again later.",
+            status=500,
+        )
+
     return success_response(
         "If an account exists with this email, a verification link has been sent."
     )
@@ -212,8 +232,12 @@ def forgot_password_controller(data):
         )
     
     token = create_password_reset_token(user.user_id)
-    send_password_reset_email(email, user.username, token)
-    
+
+    send_ok = send_password_reset_email(email, user.username, token)
+
+    if not send_ok:
+        return invalid_response("Failed to send password reset email. Please try again later.", status=500)
+
     return success_response(
         "If an account exists with this email, a password reset link has been sent."
     )
