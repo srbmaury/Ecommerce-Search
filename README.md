@@ -207,43 +207,22 @@ REDIS_URL=redis://localhost:6379/0
 
 ## 4️⃣ Email Verification Configuration (Optional but Recommended)
 
-Exactly one transport is used — whichever is configured first in this order:
+Email is sent via [Brevo](https://app.brevo.com) (free tier: 300 emails/day, no custom domain needed).  
+If `BREVO_API_KEY` is not set, emails are logged to console only (dev fallback).
 
-| Priority | Transport | Condition |
-|----------|-----------|-----------|
-| 1 | **Resend API** | `RESEND_API_KEY` is set |
-| 2 | **SMTP** | `SMTP_USER` + `SMTP_PASSWORD` set |
-| 3 | Log-only fallback | Neither set |
+### Setup
 
-If both `RESEND_API_KEY` and SMTP credentials are present, only Resend is used.
-
-### Production (Render / any cloud host)
-
-Cloud hosts block outbound SMTP. Use [Resend](https://resend.com) instead (free tier: 3,000 emails/month):
-
-1. Sign up at resend.com and get an API key
-2. Verify your sender email or domain
-3. Set in your environment:
+1. Sign up at [app.brevo.com](https://app.brevo.com)
+2. Verify your sender email under **Senders & IPs → Senders**
+3. Create an API key under **SMTP & API → API Keys**
+4. Set in your environment:
 
 ```env
-RESEND_API_KEY=re_your_api_key
-SMTP_FROM_EMAIL=noreply@yourdomain.com
-SMTP_FROM_NAME=Ecommerce Search
+BREVO_API_KEY=xkeysib-your-api-key
+FROM_EMAIL=your@gmail.com
+FROM_NAME=Ecommerce Search
 FRONTEND_URL=https://your-app.onrender.com
 ```
-
-### Local Development (SMTP)
-
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM_EMAIL=your@gmail.com
-FRONTEND_URL=http://localhost:5173
-```
-
-> **Gmail**: `SMTP_FROM_EMAIL` must match `SMTP_USER`. Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your account password.
 
 ---
 
@@ -261,22 +240,10 @@ This tells the React frontend where the backend API is located.
 
 ## 6️⃣ Admin Dashboard Configuration (Optional)
 
-To enable admin cache management and analytics for specific users, set both variables in **backend `.env`**:
+To enable admin cache management for specific users, set in **backend `.env`**:
 
 ```env
 ADMIN_USER_IDS=your-user-id
-ADMIN_SECRET=your-random-secret
-```
-
-Generate a secret with:
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-And the matching secret in **frontend `.env.local`**:
-
-```env
-VITE_ADMIN_SECRET=same-value-as-ADMIN_SECRET
 ```
 
 Admin users can:
@@ -285,7 +252,7 @@ Admin users can:
 - Invalidate recommendation caches
 - Reset cache statistics
 
-Access requires **both** a user ID listed in `ADMIN_USER_IDS` **and** the matching `X-Admin-Secret` header (sent automatically by the frontend via `VITE_ADMIN_SECRET`).
+Access is controlled entirely by `ADMIN_USER_IDS` on the backend — no frontend secret needed.
 
 ---
 
@@ -442,7 +409,7 @@ python -m ml.analytics
 - Manually invalidate search caches
 - Manually invalidate recommendation caches
 - Reset cache statistics
-- Admin-only (requires `ADMIN_USER_IDS` + `ADMIN_SECRET`)
+- Admin-only (requires `ADMIN_USER_IDS`)
 
 ---
 
