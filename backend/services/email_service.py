@@ -1,15 +1,14 @@
 """
-Email service for sending verification and password reset emails.
+Email service for sending verification and password reset emails via Brevo.
 
-Supports SMTP or can be extended for services like SendGrid, Mailgun, etc.
+Requires BREVO_API_KEY. If not set, emails are logged only (dev fallback).
+Sign up at https://app.brevo.com — free tier: 300 emails/day, no domain needed.
 """
 
 import os
 import logging
-import smtplib
 import secrets
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import requests as http_requests
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -26,13 +25,9 @@ logger = logging.getLogger("email_service")
 
 # ---------- CONFIG ----------
 
-SMTP_HOST = os.getenv("SMTP_HOST", "localhost")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
-SMTP_FROM_EMAIL = os.getenv("SMTP_FROM_EMAIL", "noreply@example.com")
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Ecommerce Search")
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
+FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@example.com")
+FROM_NAME = os.getenv("FROM_NAME", "Ecommerce Search")
 
 # Frontend URL for links in emails
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
@@ -230,41 +225,37 @@ def use_password_reset_token(token: str) -> bool:
 # ---------- EMAIL SENDING ----------
 
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
-    """
-    Send an email via SMTP.
-    Returns True if successful, False otherwise.
-    """
-    # If SMTP is not configured, log the email instead
-    if not SMTP_USER or not SMTP_PASSWORD:
+    """Send via Brevo API. Logs only if BREVO_API_KEY is not configured."""
+    if not BREVO_API_KEY:
         logger.warning(
-            "SMTP not configured. Email would have been sent:\n"
-            f"To: {to_email}\n"
-            f"Subject: {subject}\n"
-            f"Body: {text_body}"
+            "BREVO_API_KEY not set. Email not sent. To: %s | Subject: %s\nBody: %s",
+            to_email, subject, text_body,
         )
-        # Return True in dev mode to allow testing
         return True
-    
+
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM_EMAIL}>"
-        msg["To"] = to_email
-        
-        msg.attach(MIMEText(text_body, "plain"))
-        msg.attach(MIMEText(html_body, "html"))
-        
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            if SMTP_USE_TLS:
-                server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM_EMAIL, to_email, msg.as_string())
-        
-        logger.info(f"Email sent to {to_email}")
-        return True
-        
-    except Exception as e:
-        logger.exception(f"Failed to send email to {to_email}")
+        response = http_requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={
+                "api-key": BREVO_API_KEY,
+                "Content-Type": "application/json",
+            },
+            json={
+                "sender": {"name": FROM_NAME, "email": FROM_EMAIL},
+                "to": [{"email": to_email}],
+                "subject": subject,
+                "htmlContent": html_body,
+                "textContent": text_body,
+            },
+            timeout=10,
+        )
+        if response.status_code == 201:
+            logger.info("Email sent via Brevo to %s", to_email)
+            return True
+        logger.error("Brevo API error %s: %s", response.status_code, response.text)
+        return False
+    except Exception:
+        logger.exception("Failed to send email via Brevo to %s", to_email)
         return False
 
 

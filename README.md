@@ -207,23 +207,22 @@ REDIS_URL=redis://localhost:6379/0
 
 ## 4️⃣ Email Verification Configuration (Optional but Recommended)
 
-To enable account verification & password reset:
+Email is sent via [Brevo](https://app.brevo.com) (free tier: 300 emails/day, no custom domain needed).  
+If `BREVO_API_KEY` is not set, emails are logged to console only (dev fallback).
+
+### Setup
+
+1. Sign up at [app.brevo.com](https://app.brevo.com)
+2. Verify your sender email under **Senders & IPs → Senders**
+3. Create an API key under **SMTP & API → API Keys**
+4. Set in your environment:
 
 ```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your@gmail.com
-SMTP_PASSWORD=your-app-password
-SMTP_FROM_EMAIL=your@gmail.com
-FRONTEND_URL=http://localhost:5173
+BREVO_API_KEY=xkeysib-your-api-key
+FROM_EMAIL=your@gmail.com
+FROM_NAME=Ecommerce Search
+FRONTEND_URL=https://your-app.onrender.com
 ```
-
-> **Gmail users**: `SMTP_FROM_EMAIL` must match `SMTP_USER`. Use a [Gmail App Password](https://myaccount.google.com/apppasswords), not your regular password.
-
-Use a production SMTP provider:
-- Gmail (app password required)
-- SendGrid
-- Mailgun
 
 ---
 
