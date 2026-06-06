@@ -240,22 +240,10 @@ This tells the React frontend where the backend API is located.
 
 ## 6️⃣ Admin Dashboard Configuration (Optional)
 
-To enable admin cache management and analytics for specific users, set both variables in **backend `.env`**:
+To enable admin cache management for specific users, set in **backend `.env`**:
 
 ```env
 ADMIN_USER_IDS=your-user-id
-ADMIN_SECRET=your-random-secret
-```
-
-Generate a secret with:
-```bash
-python3 -c "import secrets; print(secrets.token_hex(32))"
-```
-
-And the matching secret in **frontend `.env.local`**:
-
-```env
-VITE_ADMIN_SECRET=same-value-as-ADMIN_SECRET
 ```
 
 Admin users can:
@@ -264,7 +252,7 @@ Admin users can:
 - Invalidate recommendation caches
 - Reset cache statistics
 
-Access requires **both** a user ID listed in `ADMIN_USER_IDS` **and** the matching `X-Admin-Secret` header (sent automatically by the frontend via `VITE_ADMIN_SECRET`).
+Access is controlled entirely by `ADMIN_USER_IDS` on the backend — no frontend secret needed.
 
 ---
 
@@ -421,7 +409,7 @@ python -m ml.analytics
 - Manually invalidate search caches
 - Manually invalidate recommendation caches
 - Reset cache statistics
-- Admin-only (requires `ADMIN_USER_IDS` + `ADMIN_SECRET`)
+- Admin-only (requires `ADMIN_USER_IDS`)
 
 ---
 

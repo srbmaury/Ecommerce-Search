@@ -25,12 +25,13 @@ logger = logging.getLogger("email_service")
 
 # ---------- CONFIG ----------
 
-BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "noreply@example.com")
-FROM_NAME = os.getenv("FROM_NAME", "Ecommerce Search")
-
-# Frontend URL for links in emails
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+def _cfg():
+    return {
+        "api_key":      os.getenv("BREVO_API_KEY", ""),
+        "from_email":   os.getenv("FROM_EMAIL", "noreply@example.com"),
+        "from_name":    os.getenv("FROM_NAME", "Ecommerce Search"),
+        "frontend_url": os.getenv("FRONTEND_URL", "http://localhost:5173"),
+    }
 
 # Token expiry times
 EMAIL_VERIFICATION_EXPIRY_HOURS = 24
@@ -226,7 +227,10 @@ def use_password_reset_token(token: str) -> bool:
 
 def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> bool:
     """Send via Brevo API. Logs only if BREVO_API_KEY is not configured."""
-    if not BREVO_API_KEY:
+    cfg = _cfg()
+    api_key = cfg["api_key"]
+
+    if not api_key:
         logger.warning(
             "BREVO_API_KEY not set. Email not sent. To: %s | Subject: %s\nBody: %s",
             to_email, subject, text_body,
@@ -237,11 +241,11 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> 
         response = http_requests.post(
             "https://api.brevo.com/v3/smtp/email",
             headers={
-                "api-key": BREVO_API_KEY,
+                "api-key": api_key,
                 "Content-Type": "application/json",
             },
             json={
-                "sender": {"name": FROM_NAME, "email": FROM_EMAIL},
+                "sender": {"name": cfg["from_name"], "email": cfg["from_email"]},
                 "to": [{"email": to_email}],
                 "subject": subject,
                 "htmlContent": html_body,
@@ -261,7 +265,7 @@ def _send_email(to_email: str, subject: str, html_body: str, text_body: str) -> 
 
 def send_verification_email(email: str, username: str, token: str) -> bool:
     """Send email verification link."""
-    verify_url = f"{FRONTEND_URL}/verify-email?token={token}"
+    verify_url = f"{_cfg()['frontend_url']}/verify-email?token={token}"
     
     subject = "Verify your email address"
     
@@ -295,7 +299,7 @@ If you didn't create an account, you can safely ignore this email.
 
 def send_password_reset_email(email: str, username: str, token: str) -> bool:
     """Send password reset link."""
-    reset_url = f"{FRONTEND_URL}/reset-password?token={token}"
+    reset_url = f"{_cfg()['frontend_url']}/reset-password?token={token}"
     
     subject = "Reset your password"
     

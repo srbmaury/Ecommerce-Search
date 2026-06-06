@@ -6,8 +6,7 @@ Provides admin endpoints for:
 - Manual cache invalidation
 - Cache maintenance operations
 
-All endpoints require both X-User-ID (must be in ADMIN_USER_IDS) and
-X-Admin-Secret (must match ADMIN_SECRET env var) headers.
+All endpoints require X-User-ID (must be in ADMIN_USER_IDS).
 """
 
 from flask import Blueprint, jsonify, g

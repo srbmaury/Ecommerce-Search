@@ -50,7 +50,7 @@ def configure_cors(app):
         app,
         resources={r"/*": {"origins": origins}},
         supports_credentials=True,
-        allow_headers=["Content-Type", "X-User-ID", "X-Admin-Secret"],
+        allow_headers=["Content-Type", "X-User-ID"],
     )
 
 

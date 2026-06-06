@@ -1,13 +1,8 @@
 
 import API_BASE_URL from './config';
 
-const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET || '';
-
 function adminHeaders(userId) {
-    return {
-        'X-User-ID': userId,
-        ...(ADMIN_SECRET ? { 'X-Admin-Secret': ADMIN_SECRET } : {}),
-    };
+    return { 'X-User-ID': userId };
 }
 
 function buildUrl(path, params = {}) {
