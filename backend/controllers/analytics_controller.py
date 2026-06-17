@@ -6,6 +6,7 @@ from sqlalchemy import func
 
 from backend.services.db_event_service import get_events_df
 from backend.utils.database import get_db_session
+from backend.services.redis_client import redis_get_json, redis_setex_json
 from backend.models import User
 
 
@@ -13,6 +14,8 @@ logger = logging.getLogger("analytics_debug")
 
 EVENT_CLICK = "click"
 EVENT_CART = "add_to_cart"
+ANALYTICS_CACHE_KEY = "analytics:summary"
+ANALYTICS_CACHE_TTL = 60  # seconds
 
 
 # ---------- CORE COMPUTATION ----------
@@ -58,8 +61,7 @@ def _compute_analytics():
 
 
 def get_cluster_counts():
-    session = get_db_session()
-    try:
+    with get_db_session() as session:
         rows = (
             session.query(
                 func.coalesce(User.cluster, -1),
@@ -69,13 +71,15 @@ def get_cluster_counts():
             .all()
         )
         return collections.Counter({int(cluster): int(count) for cluster, count in rows})
-    finally:
-        session.close()
 
 
 # ---------- API Endpoint ----------
 
 def get_analytics_json():
+    cached = redis_get_json(ANALYTICS_CACHE_KEY)
+    if cached:
+        return jsonify(cached)
+
     try:
         summary, cluster_counts, top_queries = _compute_analytics()
         if summary is None:
@@ -83,12 +87,10 @@ def get_analytics_json():
     except Exception:
         return jsonify({"error": "Failed to read analytics data"}), 500
 
-    return jsonify({
+    result = {
         "summary": summary,
-        "cluster_counts": {
-            str(k): int(v) for k, v in cluster_counts.items()
-        },
-        "top_queries": {
-            str(k): int(v) for k, v in top_queries.items()
-        },
-    })
+        "cluster_counts": {str(k): int(v) for k, v in cluster_counts.items()},
+        "top_queries": {str(k): int(v) for k, v in top_queries.items()},
+    }
+    redis_setex_json(ANALYTICS_CACHE_KEY, result, ANALYTICS_CACHE_TTL)
+    return jsonify(result)

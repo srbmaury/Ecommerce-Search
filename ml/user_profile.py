@@ -5,6 +5,8 @@ import pandas as pd
 
 from backend.services.db_event_service import get_events_df
 from backend.services.db_product_service import get_products_df
+from backend.utils.database import get_db_session
+from backend.models import User
 
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ def build_user_profiles() -> Dict[str, dict]:
 
     events["product_id"] = events["product_id"].astype(str)
     products["product_id"] = products["product_id"].astype(str)
+    # Normalize category casing so profile keys match intent-detection output
+    products["category"] = products["category"].fillna("").str.strip()
 
     merged = events.merge(products, on="product_id", how="inner")
 
@@ -92,5 +96,27 @@ def build_user_profiles() -> Dict[str, dict]:
             "avg_price": float(price_pref.get(user_id, 0.0)),
         }
 
+    # Attach cluster assignment so cluster-based boosting works in search and recs.
+    # profile.get("cluster") is checked by both _get_cluster_category_boost callers;
+    # without this it always returns None and the entire feature is a no-op.
+    user_clusters = _load_user_clusters()
+    for uid, profile in profiles.items():
+        profile["cluster"] = user_clusters.get(str(uid))
+
     logger.info("Built profiles for %d users", len(profiles))
     return profiles
+
+
+def _load_user_clusters() -> Dict[str, int]:
+    """Return {str(user_id): cluster} for users that have been assigned a cluster."""
+    try:
+        with get_db_session() as session:
+            rows = (
+                session.query(User.user_id, User.cluster)
+                .filter(User.cluster.isnot(None))
+                .all()
+            )
+            return {str(user_id): cluster for user_id, cluster in rows}
+    except Exception:
+        logger.warning("Failed to load user clusters; cluster boosting will be disabled")
+        return {}

@@ -40,13 +40,13 @@ export async function fetchRecommendations(userId) {
 
 // Search products
 export async function searchProducts(query, userId, options = {}) {
-    const { cursor = 0, limit } = options;
+    const { cursor = 0, limit, signal } = options;
     const res = await fetch(buildUrl('/search', {
         q: query,
         user_id: userId,
         cursor,
         limit,
-    }));
+    }), { signal });
     return handleResponse(res, 'Failed to search products');
 }
 
@@ -134,9 +134,11 @@ export async function resetPassword(token, password) {
     return handleResponse(res, 'Reset failed');
 }
 
-// Analytics API
-export async function fetchAnalytics() {
-    const res = await fetch(`${API_BASE_URL}/analytics`);
+// Analytics API (admin-only: requires userId in X-User-ID header)
+export async function fetchAnalytics(userId) {
+    const res = await fetch(`${API_BASE_URL}/analytics`, {
+        headers: adminHeaders(userId),
+    });
     return handleResponse(res, 'Failed to fetch analytics');
 }
 

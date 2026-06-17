@@ -37,31 +37,48 @@ def parse_price(value: str) -> float:
 
 CORE_PRODUCT_KEYWORDS = {
     "Computers": {
-        "laptop", "laptops", "desktop", "computer", "pc",
+        "laptop", "laptops", "notebook", "notebooks", "desktop", "desktops",
+        "computer", "computers", "pc", "macbook", "chromebook", "ultrabook",
+        "workstation", "all-in-one",
     },
     "Electronics": {
-        "phone", "phones", "smartphone", "mobile", "tablet",
+        "phone", "phones", "smartphone", "smartphones", "mobile", "mobiles",
+        "tablet", "tablets", "ipad", "iphone", "android", "gadget", "gadgets",
+        "electronics", "electronic",
     },
     "Audio": {
-        "headphones", "headphone", "earbuds", "earphones", "speaker", "speakers",
+        "headphone", "headphones", "earbud", "earbuds", "earphone", "earphones",
+        "speaker", "speakers", "soundbar", "audio", "bluetooth speaker",
+        "noise cancelling", "airpod", "airpods",
     },
     "Photography": {
-        "camera", "cameras", "dslr", "lens", "tripod",
+        "camera", "cameras", "dslr", "mirrorless", "lens", "lenses",
+        "tripod", "photography", "gopro", "webcam", "camcorder",
     },
     "Networking": {
-        "router", "modem", "wifi", "mesh",
+        "router", "routers", "modem", "modems", "wifi", "wi-fi",
+        "mesh", "access point", "ethernet", "network", "networking",
+        "range extender",
     },
     "Storage": {
-        "ssd", "hdd", "drive", "storage", "pendrive", "memory card",
+        "ssd", "ssds", "hdd", "hdds", "hard drive", "hard disk",
+        "drive", "drives", "storage", "pendrive", "flash drive",
+        "memory card", "sd card", "external drive", "nas",
     },
     "Accessories": {
-        "keyboard", "mouse", "charger", "cable", "case", "accessory", "accessories",
+        "keyboard", "keyboards", "mouse", "mice", "charger", "chargers",
+        "cable", "cables", "case", "cases", "accessory", "accessories",
+        "stand", "hub", "adapter", "adapters", "monitor",
     },
     "Gaming": {
-        "console", "controller", "playstation", "xbox",
+        "gaming", "console", "consoles", "controller", "controllers",
+        "playstation", "xbox", "nintendo", "switch", "game", "games",
+        "gamepad", "headset",
     },
     "Smart Home": {
-        "alexa", "echo", "nest", "smart light", "bulb",
+        "smart home", "alexa", "echo", "google home", "nest",
+        "smart light", "smart bulb", "bulb", "smart plug", "smart speaker",
+        "home automation", "smart display",
     },
 }
 
@@ -83,6 +100,16 @@ PREMIUM_KEYWORDS = {
 QUALITY_KEYWORDS = {
     "best", "top", "highest rated", "popular", "recommended",
 }
+
+
+# ---------- NEGATION PATTERNS ----------
+
+# Match "not X", "no X", "without X", "except X" — strips the negated term
+# so it doesn't confuse category detection or the text-search query.
+_NEGATION_RE = re.compile(
+    r"\b(?:not|no|without|except)\s+\w+(?:\s+\w+)?",
+    re.IGNORECASE,
+)
 
 
 # ---------- PRICE PATTERNS ----------
@@ -144,8 +171,11 @@ def detect_price(query: str) -> Tuple[Optional[float], Optional[float]]:
 
 
 def clean_query_text(query_norm: str) -> str:
-    """Remove price phrases and intent keywords from query."""
+    """Remove price phrases, negations, and intent keywords from query."""
     text = query_norm
+
+    # Strip negated phrases before category/modifier detection skews results
+    text = _NEGATION_RE.sub("", text)
 
     for pattern in (
         PRICE_RANGE_PATTERN,
@@ -180,7 +210,10 @@ def detect_intent(query: str) -> Dict:
     sort = detect_sort(query_norm)
     min_price, max_price = detect_price(query)
 
-    clean_query = clean_query_text(query_norm) or query_norm
+    cleaned = clean_query_text(query_norm)
+    # If cleaning stripped everything (e.g. query was only "cheap gaming"), fall
+    # back to the original normalized query so the text search isn't empty.
+    clean_query = cleaned or query_norm
 
     return {
         "original_query": query,

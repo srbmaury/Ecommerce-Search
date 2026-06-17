@@ -1,4 +1,5 @@
 import logging
+from datetime import datetime, timezone
 from typing import Dict
 
 from ml.user_clustering import cluster_users
@@ -33,11 +34,13 @@ def update_user_clusters(
     # Map user_id (as string) to User instance for fast lookup
     users_by_id = {str(user.user_id): user for user in users}
 
+    now = datetime.now(timezone.utc)
     updated = 0
     for user_id, cluster_id in clusters.items():
         user = users_by_id.get(user_id)
         if user:
             user.cluster = int(cluster_id)
+            user.cluster_updated_at = now
             updated += 1
 
     return updated

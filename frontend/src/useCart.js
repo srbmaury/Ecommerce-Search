@@ -22,6 +22,7 @@ export function useCart(user, showToast) {
     // Debounced cart update logic
     const cartUpdateQueue = useRef({});
     const cartUpdateTimers = useRef({});
+    const cartInflight = useRef(new Set());
 
     // Recalculate cart count and total whenever cart items change
     useEffect(() => {
@@ -85,12 +86,24 @@ export function useCart(user, showToast) {
             delete cartUpdateQueue.current[productId];
             delete cartUpdateTimers.current[productId];
             if (netQuantity === 0) return;
+
+            // If a call for this product is already in flight, re-queue to avoid race
+            if (cartInflight.current.has(productId)) {
+                cartUpdateQueue.current[productId] = netQuantity;
+                cartUpdateTimers.current[productId] = setTimeout(() => {
+                    cartUpdateTimers.current[productId] = null;
+                }, 300);
+                return;
+            }
+
+            cartInflight.current.add(productId);
             updateCart(user.user_id, productId, netQuantity)
                 .then(() => fetchCartData())
                 .catch(err => {
                     toastApiError(err, 'Cart update failed');
                     fetchCartData();
-                });
+                })
+                .finally(() => cartInflight.current.delete(productId));
         }, 300);
     };
 

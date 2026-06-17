@@ -12,10 +12,17 @@ import Header from './Header';
 import Toast from './Toast';
 import FiltersBar from './FiltersBar';
 import ProductGrid from './ProductGrid';
-import { Loading, EmptyState } from './LoadingEmptyState';
+import { Loading, EmptyState, SkeletonGrid } from './LoadingEmptyState';
 import AdminCacheManager from './AdminCacheManager';
 import './App.css';
 import AnalyticsDashboard from './AnalyticsDashboard';
+
+function getGreeting() {
+	const h = new Date().getHours();
+	if (h < 12) return 'Good morning';
+	if (h < 17) return 'Good afternoon';
+	return 'Good evening';
+}
 
 export default function App() {
 	const initialRouteState = (() => {
@@ -35,7 +42,6 @@ export default function App() {
 	})();
 
 	const [showAnalytics, setShowAnalytics] = useState(false);
-	const [isAdmin, setIsAdmin] = useState(false);
 	const {
 		user,
 		isSignup,
@@ -47,6 +53,7 @@ export default function App() {
 		email,
 		setEmail,
 		authError,
+		authSuccess,
 		authLoading,
 		authView,
 		setAuthView,
@@ -55,11 +62,6 @@ export default function App() {
 	} = useAuth();
 
 	const [urlToken, setUrlToken] = useState(initialRouteState.token);
-
-	// Reset admin state when user logs out
-	useEffect(() => {
-		if (!user) setIsAdmin(false);
-	}, [user]);
 
 	useEffect(() => {
 		if (initialRouteState.view !== 'auth') {
@@ -118,8 +120,16 @@ export default function App() {
 		paginatedResults,
 		hasMoreResults,
 		isLoadingMore,
-		search
+		search,
+		appliedIntent,
 	} = useSearch(user, showToast);
+
+	const clearFilters = useCallback(() => {
+		setCategoryFilter('');
+		setMinPrice('');
+		setMaxPrice('');
+		setSortBy('');
+	}, [setCategoryFilter, setMinPrice, setMaxPrice, setSortBy]);
 
 	/* ---------- CART ---------- */
 	const {
@@ -138,6 +148,31 @@ export default function App() {
 
 	/* ---------- PRODUCT DETAIL MODAL ---------- */
 	const [selectedProduct, setSelectedProduct] = useState(null);
+
+	/* ---------- DOCUMENT TITLE ---------- */
+	useEffect(() => {
+		const base = 'Ecommerce-Search';
+		if (selectedProduct) {
+			document.title = `${selectedProduct.title} — ${base}`;
+		} else if (results !== null && query.trim()) {
+			document.title = `${query.trim()} — ${base}`;
+		} else {
+			document.title = base;
+		}
+	}, [selectedProduct, results, query]);
+
+	/* ---------- ESC KEY ---------- */
+	useEffect(() => {
+		const onKeyDown = (e) => {
+			if (e.key !== 'Escape') return;
+			if (showCart) { setShowCart(false); return; }
+			if (selectedProduct) { setSelectedProduct(null); return; }
+			if (showAnalytics) setShowAnalytics(false);
+		};
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [showCart, selectedProduct, showAnalytics]);
+
 	if (!user) {
 		// Handle different auth views
 		if (authView === 'forgot-password') {
@@ -172,6 +207,7 @@ export default function App() {
 				password={password}
 				email={email}
 				authError={authError}
+				authSuccess={authSuccess}
 				authLoading={authLoading}
 				onUsernameChange={e => setUsername(e.target.value)}
 				onPasswordChange={e => setPassword(e.target.value)}
@@ -196,10 +232,8 @@ export default function App() {
 			/>
 
 			<div className="heading-container">
-				<h1>🛍️ Ecommerce Search Engine</h1>
-				<p className='main-heading'>
-					Welcome, <strong>{user.username}</strong>! You are in Group <strong>{user.group}</strong>
-				</p>
+				<h1>{getGreeting()}, {user.username}!</h1>
+				<p className='main-heading'>Discover great products, tailored for you.</p>
 			</div>
 
 			{/* Analytics Dashboard Modal */}
@@ -207,7 +241,7 @@ export default function App() {
 				<div className="modal-overlay" onClick={() => setShowAnalytics(false)}>
 					<div className="analytics-modal" onClick={e => e.stopPropagation()}>
 						<button className="modal-close" onClick={() => setShowAnalytics(false)}>✕</button>
-						<AnalyticsDashboard />
+						<AnalyticsDashboard user={user} />
 					</div>
 				</div>
 			)}
@@ -230,20 +264,21 @@ export default function App() {
 			{/* Toast Notification */}
 			<Toast toast={toast} />
 			{/* Admin Cache Manager (only visible to admins) */}
-			<AdminCacheManager user={user} onAdminConfirmed={() => setIsAdmin(true)} />
+			<AdminCacheManager user={user} />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}
 				onClose={() => setSelectedProduct(null)}
+				onCartUpdate={handleCartUpdate}
+				cartQuantity={selectedProduct ? getCartQuantity(selectedProduct.product_id) : 0}
 			/>
 
-			{/* ✅ WHITE CONTENT CARD */}
 			<main className="container">
 				<form className="search-bar global-search" onSubmit={search}>
 					<input
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						placeholder="Search products"
+						placeholder="Search for laptops, headphones, cameras..."
 						disabled={searchLoading}
 					/>
 					<button disabled={searchLoading}>
@@ -254,13 +289,21 @@ export default function App() {
 					{/* ---------- SEARCH RESULTS ---------- */}
 					{searchLoading && (
 						<section>
-							<h3>Search Results</h3>
+							<h3>🔍 Search Results</h3>
 							<Loading>Searching...</Loading>
 						</section>
 					)}
 					{!searchLoading && results !== null && (
 						<section>
-							<h3>Search Results ({filteredResults.length} products)</h3>
+							<h3>🔍 Search Results ({filteredResults.length} products)</h3>
+							{appliedIntent && appliedIntent.length > 0 && (
+								<div className="intent-chips">
+									<span className="intent-chips-label">Interpreted as:</span>
+									{appliedIntent.map((chip, i) => (
+										<span key={i} className={`intent-chip intent-chip-${chip.kind}`}>{chip.label}</span>
+									))}
+								</div>
+							)}
 
 							{/* Filters and Sort */}
 							<FiltersBar
@@ -273,10 +316,11 @@ export default function App() {
 								setMaxPrice={setMaxPrice}
 								sortBy={sortBy}
 								setSortBy={setSortBy}
+								onClearFilters={clearFilters}
 							/>
 
 							{filteredResults.length === 0 ? (
-								<EmptyState>No products found. Try adjusting filters!</EmptyState>
+								<EmptyState icon="🔍">No products found. Try adjusting your filters!</EmptyState>
 							) : (
 								<>
 									<ProductGrid
@@ -309,12 +353,12 @@ export default function App() {
 
 					{/* ---------- RECENTLY VIEWED ---------- */}
 					<section>
-						<h3>Recently Viewed</h3>
+						<h3>🕐 Recently Viewed</h3>
 						{recsLoading ? (
-							<Loading />
+							<SkeletonGrid count={8} />
 						) : (
 							recent.length === 0 ? (
-								<EmptyState>No recent products.</EmptyState>
+								<EmptyState icon="👀">No recently viewed products yet.</EmptyState>
 							) : (
 								<ProductGrid
 									products={recent}
@@ -330,12 +374,12 @@ export default function App() {
 
 					{/* ---------- RECOMMENDED ---------- */}
 					<section>
-						<h3>Recommended For You</h3>
+						<h3>✨ Recommended For You</h3>
 						{recsLoading ? (
-							<Loading />
+							<SkeletonGrid count={8} />
 						) : (
 							recommended.length === 0 ? (
-								<EmptyState>No recommendations yet.</EmptyState>
+								<EmptyState icon="✨">No recommendations yet — search for a few products first!</EmptyState>
 							) : (
 								<ProductGrid
 									products={recommended}

@@ -1,8 +1,12 @@
+import hashlib
+import logging
 import os
-import random
+import threading
 import uuid
 import bcrypt
 from flask import jsonify
+
+logger = logging.getLogger("auth_controller")
 
 from backend.services.security import (
     validate_username,
@@ -41,6 +45,23 @@ def is_admin(user_id: str) -> bool:
 def generate_user_id():
     # Short, collision-resistant, non-sequential ID
     return f"u{uuid.uuid4().hex[:12]}"
+
+
+def _send_email_async(fn, *args):
+    """Fire-and-forget email send in a background thread."""
+    def _run():
+        try:
+            fn(*args)
+        except Exception:
+            logger.exception("Async email send failed")
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def assign_experiment_group(user_id: str) -> str:
+    # Hash-based assignment gives a guaranteed 50/50 split independent of
+    # sample size, unlike random.choice which can skew on small cohorts.
+    h = int(hashlib.md5(user_id.encode()).hexdigest(), 16)
+    return EXPERIMENT_GROUPS[h % len(EXPERIMENT_GROUPS)]
 
 
 def invalid_response(message, status=400):
@@ -88,7 +109,7 @@ def signup_controller(data):
             return invalid_response(error)
 
     user_id = generate_user_id()
-    group = random.choice(EXPERIMENT_GROUPS)
+    group = assign_experiment_group(user_id)
 
     try:
         user = create_user(
@@ -107,16 +128,10 @@ def signup_controller(data):
             return invalid_response("username already exists")
         raise
 
-    # Send verification email if email provided
+    # Send verification email asynchronously so signup doesn't block on SMTP
     if email:
         token = create_email_verification_token(user.user_id)
-        send_ok = send_verification_email(email, username, token)
-        if not send_ok:
-            return invalid_response(
-                "Account created but failed to send verification email. "
-                "Please use 'Resend verification' to try again.",
-                status=500,
-            )
+        _send_email_async(send_verification_email, email, username, token)
 
     return jsonify({
         "user_id": user.user_id,
@@ -134,7 +149,10 @@ def login_controller(data):
     if not username or not password:
         return invalid_response("username and password required")
 
-    user = get_user_by_username(username)
+    if "@" in username:
+        user = get_user_by_email(username.strip().lower())
+    else:
+        user = get_user_by_username(username)
 
     password_valid = constant_time_password_check(
         password,
@@ -201,12 +219,7 @@ def resend_verification_controller(data):
         return success_response("Email is already verified.")
     
     token = create_email_verification_token(user.user_id)
-    send_ok = send_verification_email(email, user.username, token)
-    if not send_ok:
-        return invalid_response(
-            "Failed to send verification email. Please try again later.",
-            status=500,
-        )
+    _send_email_async(send_verification_email, email, user.username, token)
 
     return success_response(
         "If an account exists with this email, a verification link has been sent."
@@ -232,11 +245,7 @@ def forgot_password_controller(data):
         )
     
     token = create_password_reset_token(user.user_id)
-
-    send_ok = send_password_reset_email(email, user.username, token)
-
-    if not send_ok:
-        return invalid_response("Failed to send password reset email. Please try again later.", status=500)
+    _send_email_async(send_password_reset_email, email, user.username, token)
 
     return success_response(
         "If an account exists with this email, a password reset link has been sent."

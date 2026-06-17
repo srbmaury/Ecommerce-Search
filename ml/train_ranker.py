@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import pandas as pd
+import numpy as np
+from scipy.stats import spearmanr
+
 import joblib
 from lightgbm import LGBMRanker
 
@@ -16,7 +19,6 @@ from ml.features import build_features
 from backend.utils.search import user_category_score, user_price_affinity
 from backend.services.db_product_service import get_products_df
 from backend.services.db_event_service import get_events_df
-
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +133,20 @@ def build_training_data(
             f"No training data produced. Filtered events: {filtered_events}/{len(events)}"
         )
 
+    total_events = len(events)
+    loss_rate = filtered_events / total_events if total_events > 0 else 0
+    if loss_rate > 0.1:
+        logger.warning(
+            "High training data loss: %d/%d events skipped (%.1f%%). "
+            "Check for orphaned events referencing deleted products.",
+            filtered_events, total_events, loss_rate * 100,
+        )
+    else:
+        logger.info(
+            "Training data: %d samples from %d events (%d skipped)",
+            len(X), total_events, filtered_events,
+        )
+
     return X, y, group
 
 
@@ -145,11 +161,45 @@ def train_and_save_model(X, y, group) -> None:
         len(group),
     )
 
-    model = LGBMRanker(
-        n_estimators=100,
-        random_state=42,
-    )
-    model.fit(X, y, group=group)
+    X_arr = np.array(X)
+    y_arr = np.array(y)
+
+    # Hold out the last 20% of samples for evaluation (preserves group ordering)
+    split = max(1, int(len(X_arr) * 0.8))
+    X_train, X_test = X_arr[:split], X_arr[split:]
+    y_train, y_test = y_arr[:split], y_arr[split:]
+
+    # Rebuild group sizes for the training portion
+    train_group: list[int] = []
+    consumed = 0
+    for g in group:
+        if consumed >= split:
+            break
+        take = min(g, split - consumed)
+        if take > 0:
+            train_group.append(take)
+        consumed += g
+
+    MIN_TRAINING_SAMPLES = 10
+    if len(X_train) < MIN_TRAINING_SAMPLES:
+        raise RuntimeError(
+            f"Too few training samples: {len(X_train)} (minimum {MIN_TRAINING_SAMPLES}). "
+            "Collect more interaction data before retraining."
+        )
+
+    model = LGBMRanker(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train, group=train_group)
+
+    if len(X_test) >= 5:
+        preds = model.predict(X_test)
+        corr, _ = spearmanr(preds, y_test)
+        logger.info(
+            "Evaluation — Spearman rank correlation on held-out 20%%: %.3f "
+            "(%s)", corr,
+            "good" if corr > 0.5 else "low — consider more training data",
+        )
+    else:
+        logger.info("Too few test samples for evaluation; skipping")
 
     joblib.dump(model, MODEL_PATH)
     logger.info("Model saved to %s", MODEL_PATH)

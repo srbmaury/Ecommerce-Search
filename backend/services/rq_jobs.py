@@ -16,6 +16,7 @@ from datetime import timedelta
 
 from ml.train_ranker import main as train_ranker_main
 from ml.assign_user_clusters import assign_clusters_to_users
+from backend.services.db_event_service import purge_old_events
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -80,6 +81,9 @@ def retrain_and_cluster():
         logger.info("[RQ] Starting user clustering")
         assign_clusters_to_users()
         logger.info("[RQ] User clustering completed")
+
+        logger.info("[RQ] Purging search events older than 90 days")
+        purge_old_events(retention_days=90)
 
     except Exception:
         logger.exception("Retrain + cluster job failed")

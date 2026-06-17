@@ -46,6 +46,7 @@ class User(Base):
 
     group = Column(String(10), default="A", index=True)
     cluster = Column(Integer, nullable=True, index=True)
+    cluster_updated_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

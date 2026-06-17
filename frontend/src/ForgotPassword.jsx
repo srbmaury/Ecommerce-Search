@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { forgotPassword } from './api';
+import AuthLeftPanel from './AuthLeftPanel';
 
 export default function ForgotPassword({ onBack }) {
     const [email, setEmail] = useState('');
@@ -25,30 +26,33 @@ export default function ForgotPassword({ onBack }) {
 
     return (
         <div className="auth-page">
-            <h1 className="auth-heading">Forgot Password</h1>
-            <div className="auth-card">
-                <h2>Reset Your Password</h2>
-                <p className="auth-description">
-                    Enter your email address and we&apos;ll send you a link to reset your password.
-                </p>
-                <form onSubmit={handleSubmit}>
-                    <input
-                        type="email"
-                        placeholder="Email address"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        required
-                    />
-                    <button type="submit" disabled={loading}>
-                        {loading ? 'Sending...' : 'Send Reset Link'}
-                    </button>
-                    {error && <div className="auth-error">{error}</div>}
-                    {message && <div className="auth-success">{message}</div>}
-                </form>
-                <p className="auth-toggle">
-                    Remember your password?{' '}
-                    <span onClick={onBack}>Back to Login</span>
-                </p>
+            <AuthLeftPanel />
+            <div className="auth-right">
+                <div className="auth-card">
+                    <h2>Reset Password</h2>
+                    <p className="auth-description">
+                        Enter your email and we&apos;ll send you a reset link.
+                    </p>
+                    <form onSubmit={handleSubmit}>
+                        <input
+                            type="email"
+                            placeholder="Email address"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            required
+                            autoComplete="email"
+                        />
+                        <button type="submit" disabled={loading}>
+                            {loading ? 'Sending...' : 'Send Reset Link'}
+                        </button>
+                        {error && <div className="auth-error">{error}</div>}
+                        {message && <div className="auth-success">{message}</div>}
+                    </form>
+                    <p className="auth-toggle">
+                        Remember your password?{' '}
+                        <span onClick={onBack}>Back to Login</span>
+                    </p>
+                </div>
             </div>
         </div>
     );

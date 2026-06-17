@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { searchProducts, fetchRecommendations } from './api';
 import { useApiToast } from './useApiToast';
 
@@ -12,7 +12,8 @@ export function useSearch(user, showToast) {
     const [recent, setRecent] = useState([]);
     const [recommended, setRecommended] = useState([]);
     const [searchLoading, setSearchLoading] = useState(false);
-    const [recsLoading, setRecsLoading] = useState(false);
+    const [recsLoading, setRecsLoading] = useState(!!user);
+    const [appliedIntent, setAppliedIntent] = useState(null);
 
     // Filter & pagination state
     const [categoryFilter, setCategoryFilter] = useState('');
@@ -24,14 +25,18 @@ export function useSearch(user, showToast) {
     const [hasMoreResults, setHasMoreResults] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
 
+    // Abort controller for cancelling in-flight searches
+    const searchAbortRef = useRef(null);
+
     const ITEMS_PER_PAGE = 12;
     const SEARCH_PAGE_SIZE = 60;
     const categories = ['Audio', 'Electronics', 'Computers', 'Photography', 'Accessories', 'Gaming', 'Networking', 'Smart Home', 'Storage'];
 
-    const loadSearchPage = useCallback(async (cursor, append = false) => {
+    const loadSearchPage = useCallback(async (cursor, append = false, signal = undefined) => {
         const data = await searchProducts(query, user.user_id, {
             cursor,
             limit: SEARCH_PAGE_SIZE,
+            signal,
         });
 
         const products = Array.isArray(data) ? data : (data.products || []);
@@ -63,12 +68,24 @@ export function useSearch(user, showToast) {
     const search = useCallback(async (e) => {
         e.preventDefault();
         if (!user?.user_id) return;
+        // Normalize: trim, collapse whitespace, cap at 256 chars
+        const normalized = query.trim().replace(/\s+/g, ' ').slice(0, 256);
+        if (!normalized) return;
+        if (normalized !== query) setQuery(normalized);
+
+        // Cancel any previous in-flight search to prevent stale results
+        if (searchAbortRef.current) {
+            searchAbortRef.current.abort();
+        }
+        searchAbortRef.current = new AbortController();
+        const { signal } = searchAbortRef.current;
+
         setSearchLoading(true);
         setCurrentPage(1);
         setNextCursor(null);
         setHasMoreResults(false);
         try {
-            const data = await loadSearchPage(0, false);
+            const data = await loadSearchPage(0, false, signal);
             let products = Array.isArray(data) ? data : (data.products || []);
             if (data.intent) {
                 const { suggested_category, suggested_sort, suggested_min_price, suggested_max_price, detected } = data.intent;
@@ -80,18 +97,25 @@ export function useSearch(user, showToast) {
                 setSortBy(newSort);
                 setMinPrice(newMinPrice);
                 setMaxPrice(newMaxPrice);
-                const actionableIntents = (detected || []).filter(i => i !== 'category');
-                if (actionableIntents.length > 0) {
-                    const intentMsg = actionableIntents.map(i => i.replace('_', ' ')).join(', ');
-                    showToast(`Applied: ${intentMsg}`, 'success');
-                }
+                // Build an appliedIntent summary for inline display below the search bar
+                const chips = [];
+                if (newCategory) chips.push({ label: newCategory, kind: 'category' });
+                if (newSort === 'price_asc') chips.push({ label: 'Price: low to high', kind: 'sort' });
+                if (newSort === 'price_desc') chips.push({ label: 'Price: high to low', kind: 'sort' });
+                if (newSort === 'rating') chips.push({ label: 'Top rated', kind: 'sort' });
+                if (suggested_max_price) chips.push({ label: `Under $${suggested_max_price}`, kind: 'price' });
+                if (suggested_min_price) chips.push({ label: `Over $${suggested_min_price}`, kind: 'price' });
+                setAppliedIntent(chips.length > 0 ? chips : null);
+            } else {
+                setAppliedIntent(null);
             }
         } catch (error) {
+            if (error.name === 'AbortError') return; // Superseded by a newer search
             toastApiError(error);
         } finally {
             setSearchLoading(false);
         }
-    }, [user?.user_id, showToast, loadSearchPage, toastApiError]);
+    }, [user?.user_id, showToast, loadSearchPage, toastApiError, query]);
 
     useEffect(() => {
         if (!results || results.length === 0) return;
@@ -231,6 +255,7 @@ export function useSearch(user, showToast) {
         isLoadingMore,
 
         // Functions
-        search
+        search,
+        appliedIntent,
     };
 }

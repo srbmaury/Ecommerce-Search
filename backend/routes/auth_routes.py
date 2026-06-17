@@ -11,43 +11,31 @@ from backend.controllers.auth_controller import (
 bp = Blueprint("auth", __name__, url_prefix="/api")
 
 
-@bp.route("/signup", methods=["POST", "OPTIONS"])
+@bp.route("/signup", methods=["POST"])
 def signup():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return signup_controller(request.json or {})
 
 
-@bp.route("/login", methods=["POST", "OPTIONS"])
+@bp.route("/login", methods=["POST"])
 def login():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return login_controller(request.json or {})
 
 
-@bp.route("/verify-email", methods=["POST", "OPTIONS"])
+@bp.route("/verify-email", methods=["POST"])
 def verify_email():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return verify_email_controller(request.json or {})
 
 
-@bp.route("/resend-verification", methods=["POST", "OPTIONS"])
+@bp.route("/resend-verification", methods=["POST"])
 def resend_verification():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return resend_verification_controller(request.json or {})
 
 
-@bp.route("/forgot-password", methods=["POST", "OPTIONS"])
+@bp.route("/forgot-password", methods=["POST"])
 def forgot_password():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return forgot_password_controller(request.json or {})
 
 
-@bp.route("/reset-password", methods=["POST", "OPTIONS"])
+@bp.route("/reset-password", methods=["POST"])
 def reset_password():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     return reset_password_controller(request.json or {})

@@ -1,5 +1,6 @@
 import logging
 import threading
+import time
 from backend.utils.sanitize import sanitize_user_id
 
 logger = logging.getLogger("cart_controller")
@@ -71,6 +72,7 @@ def update_cart_controller(data):
     """
     Unified cart update: accepts quantity (positive = add, negative = remove).
     """
+    t0 = time.perf_counter()
     raw_user_id = data.get("user_id")
     product_id = data.get("product_id")
     raw_quantity = data.get("quantity", 1)
@@ -78,6 +80,13 @@ def update_cart_controller(data):
 
     if not product_id:
         return error_response("product_id required")
+
+    try:
+        product_id = int(product_id)
+        if product_id <= 0:
+            raise ValueError
+    except (TypeError, ValueError):
+        return error_response("product_id must be a positive integer")
 
     try:
         quantity = int(raw_quantity)
@@ -111,6 +120,8 @@ def update_cart_controller(data):
             daemon=True
         ).start()
 
+    elapsed = (time.perf_counter() - t0) * 1000
+    logger.info("update_cart user=%s product=%s qty=%s %.1fms", user_id, product_id, quantity, elapsed)
     return {"status": "cart updated", "quantity": quantity}, 200
 
 
@@ -171,11 +182,26 @@ def clear_cart_controller(data):
     if error:
         return error
 
-
     try:
         clear_cart(user.user_id)
     except Exception:
         logger.warning("Failed to clear cart for user=%s", user.user_id, exc_info=True)
         return error_response("Failed to clear cart", 500)
+
+    group = getattr(user, "group", None) or DEFAULT_GROUP
+
+    def _log_clear():
+        try:
+            create_search_event(
+                user_id=user.user_id,
+                query="",
+                product_id=None,
+                event_type="cart_cleared",
+                group=group,
+            )
+        except Exception:
+            logger.warning("Failed to log cart_cleared event for user=%s", user.user_id, exc_info=True)
+
+    threading.Thread(target=_log_clear, daemon=True).start()
 
     return {"status": "cart cleared"}, 200

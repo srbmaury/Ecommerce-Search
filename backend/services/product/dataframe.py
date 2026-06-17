@@ -7,11 +7,13 @@ def _is_postgres(session) -> bool:
     return session.bind.dialect.name == "postgresql"
 
 
-def get_products_df(search_query=None, limit=DEFAULT_LIMIT):
+def get_products_df(search_query=None, category_filter=None, limit=DEFAULT_LIMIT):
     """
     Returns products as a pandas DataFrame.
-    Uses PostgreSQL full-text search in production and a SQLite-friendly
-    fallback for local development.
+
+    search_query: free-text search (Postgres full-text / SQLite LIKE)
+    category_filter: exact category match (case-insensitive), applied in addition
+                     to or independently of search_query
     """
     with get_db_session() as session:
         query = session.query(Product)
@@ -25,14 +27,18 @@ def get_products_df(search_query=None, limit=DEFAULT_LIMIT):
                     .order_by(desc(rank), desc(Product.popularity))
                 )
             else:
-                # SQLite/local fallback. Production should use the Postgres
-                # tsvector path above to avoid full table scans.
+                # SQLite/local fallback
                 pattern = f"%{search_query}%"
                 query = query.filter(
                     (Product.title.ilike(pattern)) |
                     (Product.description.ilike(pattern)) |
                     (Product.category.ilike(pattern))
                 )
+        if category_filter:
+            query = query.filter(Product.category.ilike(category_filter))
+        if not search_query:
+            # Without text ranking, fall back to popularity order
+            query = query.order_by(desc(Product.popularity))
         products = query.limit(limit).all()
         df = pd.DataFrame([serialize_product(p) for p in products])
         if "created_at" in df.columns:

@@ -42,6 +42,33 @@ logging.basicConfig(
 logger = logging.getLogger("app")
 
 
+# ---------- ENV VAR VALIDATION ----------
+
+_REQUIRED_ENV_VARS = ["DATABASE_URL", "REDIS_URL", "SECRET_KEY"]
+_OPTIONAL_ENV_VARS = {
+    "ADMIN_USER_IDS": "admin features disabled",
+    "SMTP_HOST":      "email sending disabled",
+    "SMTP_PORT":      "email sending disabled",
+    "SMTP_USER":      "email sending disabled",
+    "SMTP_PASSWORD":  "email sending disabled",
+}
+
+
+def _validate_env():
+    missing = [v for v in _REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        raise EnvironmentError(
+            f"Required environment variables not set: {', '.join(missing)}. "
+            "Check your .env file."
+        )
+    for var, impact in _OPTIONAL_ENV_VARS.items():
+        if not os.getenv(var):
+            logger.warning("Optional env var %s not set — %s", var, impact)
+
+
+_validate_env()
+
+
 # ---------- APP FACTORY ----------
 
 def create_app() -> Flask:

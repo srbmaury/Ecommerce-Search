@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { verifyEmail } from './api';
+import AuthLeftPanel from './AuthLeftPanel';
 
 export default function VerifyEmail({ token, onSuccess, onBack }) {
     const [loading, setLoading] = useState(true);
@@ -17,10 +18,7 @@ export default function VerifyEmail({ token, onSuccess, onBack }) {
             try {
                 const data = await verifyEmail(token);
                 setMessage(data.message);
-                // Redirect after success
-                setTimeout(() => {
-                    onSuccess?.();
-                }, 2000);
+                setTimeout(() => { onSuccess?.(); }, 2000);
             } catch (err) {
                 setError(err.message);
             } finally {
@@ -33,27 +31,28 @@ export default function VerifyEmail({ token, onSuccess, onBack }) {
 
     return (
         <div className="auth-page">
-            <h1 className="auth-heading">Email Verification</h1>
-            <div className="auth-card">
-                {loading && (
-                    <div className="auth-loading">
-                        <p>Verifying your email...</p>
-                    </div>
-                )}
-                {message && (
-                    <div className="auth-success">
-                        <p>{message}</p>
-                        <p>Redirecting to login...</p>
-                    </div>
-                )}
-                {error && (
-                    <>
-                        <div className="auth-error">{error}</div>
-                        <p className="auth-toggle">
-                            <span onClick={onBack}>Back to Login</span>
-                        </p>
-                    </>
-                )}
+            <AuthLeftPanel />
+            <div className="auth-right">
+                <div className="auth-card">
+                    <h2>Email Verification</h2>
+                    {loading && (
+                        <div className="auth-loading">Verifying your email...</div>
+                    )}
+                    {message && (
+                        <div className="auth-success">
+                            <p>{message}</p>
+                            <p>Redirecting to login...</p>
+                        </div>
+                    )}
+                    {error && (
+                        <>
+                            <div className="auth-error">{error}</div>
+                            <p className="auth-toggle">
+                                <span onClick={onBack}>Back to Login</span>
+                            </p>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     );
