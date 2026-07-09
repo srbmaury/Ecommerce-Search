@@ -30,8 +30,10 @@ def extract_user_features() -> Tuple[np.ndarray, np.ndarray, List[str]]:
         X: feature matrix (n_users, n_features)
         categories: category ordering used for features
     """
-    events = get_events_df()
-    products = get_products_df()
+    # Batch job — needs the full catalog/history, not the 1000-row default
+    # cap meant for interactive API calls (see ml/user_profile.py).
+    events = get_events_df(limit=None)
+    products = get_products_df(limit=None)
 
     if events.empty or products.empty:
         logger.warning("Events or products table is empty")
@@ -40,8 +42,11 @@ def extract_user_features() -> Tuple[np.ndarray, np.ndarray, List[str]]:
     events = events.copy()
     products = products.copy()
 
-    events["product_id"] = events["product_id"].astype(str)
-    products["product_id"] = products["product_id"].astype(str)
+    # events.product_id is float64 vs products.product_id int64 — casting
+    # straight to str gives "16923.0" vs "16923", which never match (see
+    # ml/user_profile.py for the same fix). Go through nullable Int64 first.
+    events["product_id"] = events["product_id"].astype("Int64").astype(str)
+    products["product_id"] = products["product_id"].astype("Int64").astype(str)
 
     merged = events.merge(products, on="product_id", how="left")
 

@@ -36,5 +36,6 @@ def create_product(
                 {"product_id": product.id},
             )
 
+        session.commit()
         session.refresh(product)
         return product

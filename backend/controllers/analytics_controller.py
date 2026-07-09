@@ -21,7 +21,11 @@ ANALYTICS_CACHE_TTL = 60  # seconds
 # ---------- CORE COMPUTATION ----------
 
 def _compute_analytics():
-    events = get_events_df()
+    # limit=None: this is an aggregate report over all history, not an
+    # interactive lookup — the default limit=1000 (meant for API safety)
+    # would silently compute CTR/conversion/top-queries from only the most
+    # recent slice of events instead of the full picture.
+    events = get_events_df(limit=None)
     if events.empty:
         logger.warning("No events found in database.")
         return None, None, None

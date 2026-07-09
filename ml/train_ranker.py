@@ -71,14 +71,19 @@ def validate_dataframe(df: pd.DataFrame, name: str, required_columns: List[str])
 # ---------------------------------------------------------------------
 
 def load_products() -> pd.DataFrame:
-    products = get_products_df()
+    # limit=None: training needs the full catalog, not the 1000-row cap
+    # get_products_df() applies by default for interactive API calls — with
+    # it, only the top-1000-by-popularity products are visible, so most
+    # events reference products outside the sample and get miscounted as
+    # "orphaned".
+    products = get_products_df(limit=None)
     validate_dataframe(products, "Products", REQUIRED_PRODUCT_COLUMNS)
     products["created_at"] = pd.to_datetime(products["created_at"])
     return products
 
 
 def load_events() -> pd.DataFrame:
-    events = get_events_df()
+    events = get_events_df(limit=None)
     validate_dataframe(events, "Events", REQUIRED_EVENT_COLUMNS)
     return events
 

@@ -18,7 +18,7 @@ function AdminCacheManager({ user }) {
       setIsAdmin(false);
       return;
     }
-    fetchAdminCacheDashboard(user.user_id)
+    fetchAdminCacheDashboard(user.token)
       .then(data => {
         setIsAdmin(true);
         setAdminInfo(data.admin);
@@ -36,7 +36,7 @@ function AdminCacheManager({ user }) {
   const openModal = () => {
     setShowModal(true);
     setStatsLoading(true);
-    fetchAdminCacheDashboard(user.user_id)
+    fetchAdminCacheDashboard(user.token)
       .then(data => {
         setAdminInfo(data.admin);
         setCacheStats(data.cache);
@@ -53,7 +53,7 @@ function AdminCacheManager({ user }) {
 
   const refreshStats = async () => {
     try {
-      const data = await fetchAdminCacheDashboard(user.user_id);
+      const data = await fetchAdminCacheDashboard(user.token);
       setCacheStats(data.cache);
       setLastUpdated(new Date());
       showToast('Stats refreshed', 'success');
@@ -65,7 +65,7 @@ function AdminCacheManager({ user }) {
   const handleInvalidate = async (endpoint, label) => {
     setLoading(true);
     try {
-      const data = await invalidateCacheEndpoint(endpoint, user.user_id);
+      const data = await invalidateCacheEndpoint(endpoint, user.token);
       showToast(`${label}: ${data.status}`, 'success');
       await refreshStats();
     } catch (error) {
@@ -79,7 +79,7 @@ function AdminCacheManager({ user }) {
     if (!confirm('Reset cache statistics? This cannot be undone.')) return;
     setLoading(true);
     try {
-      await resetCacheStats(user.user_id);
+      await resetCacheStats(user.token);
       showToast('Cache statistics reset', 'success');
       setCacheStats({ hits: 0, misses: 0, invalidations: 0, hit_rate: 0 });
       setLastUpdated(new Date());

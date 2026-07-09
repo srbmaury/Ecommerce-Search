@@ -4,7 +4,7 @@ import StarRating from './StarRating';
 
 export default function ProductCard({
     product,
-    userId,
+    token,
     query,
     isRecommendation,
     onCartUpdate,
@@ -29,7 +29,7 @@ export default function ProductCard({
         if (onProductClick) onProductClick(product);
         if (!isRecommendation) {
             try {
-                await logEvent('click', product.product_id, query, userId);
+                await logEvent('click', product.product_id, query, token);
             } catch (err) {
                 console.error('Failed to log click event:', err);
             }

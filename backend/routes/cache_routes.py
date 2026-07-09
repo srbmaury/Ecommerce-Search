@@ -6,7 +6,7 @@ Provides admin endpoints for:
 - Manual cache invalidation
 - Cache maintenance operations
 
-All endpoints require X-User-ID (must be in ADMIN_USER_IDS).
+All endpoints require a valid session token whose user_id is in ADMIN_USER_IDS.
 """
 
 from flask import Blueprint, jsonify, g

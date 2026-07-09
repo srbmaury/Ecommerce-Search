@@ -852,6 +852,166 @@ section h3::after {
     background: var(--primary-dark);
 }
 
+/* ========== PRODUCT REVIEWS ========== */
+.product-reviews {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+}
+
+.reviews-heading {
+    margin: 0 0 12px 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.review-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 18px;
+    padding: 14px;
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+}
+
+.star-picker {
+    display: flex;
+    gap: 2px;
+}
+
+.star-picker-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 22px;
+    line-height: 1;
+    color: #d1d5db;
+    padding: 2px;
+}
+
+.star-picker-btn.filled {
+    color: #f59e0b;
+}
+
+.review-comment-input {
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.review-form-error {
+    color: var(--danger);
+    font-size: 12px;
+}
+
+.review-submit-btn {
+    align-self: flex-start;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.review-submit-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.review-form-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.review-delete-btn {
+    background: white;
+    color: var(--danger);
+    border: 1px solid var(--danger-border);
+    border-radius: var(--radius-md);
+    padding: 8px 16px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.review-delete-btn:hover:not(:disabled) {
+    background: var(--danger-light);
+}
+
+.review-delete-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.review-item-mine {
+    background: var(--primary-light);
+    margin: 0 -10px;
+    padding: 10px;
+    border-radius: var(--radius-md);
+}
+
+.review-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.review-item {
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+}
+
+.review-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.review-item-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.review-item-username {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.review-item-comment {
+    margin: 0;
+    font-size: 13px;
+    color: #475569;
+    line-height: 1.5;
+}
+
+.review-list-loading,
+.review-list-error,
+.review-list-empty {
+    font-size: 13px;
+    color: var(--text-muted);
+    padding: 8px 0;
+}
+
+.review-list-error {
+    color: var(--danger);
+}
+
 /* ========== ANALYTICS DASHBOARD ========== */
 .analytics-dashboard {
     padding: 8px;
@@ -1826,6 +1986,149 @@ input:disabled {
     font-style: italic;
 }
 
+/* ========== ADMIN PRODUCT MANAGER ========== */
+.admin-product-toggle-btn {
+    right: 88px;
+    background: linear-gradient(135deg, #059669 0%, #0891b2 100%);
+    box-shadow: 0 4px 16px rgba(5, 150, 105, 0.4);
+}
+
+.admin-product-toggle-btn:hover {
+    box-shadow: 0 6px 22px rgba(5, 150, 105, 0.6);
+}
+
+.admin-product-modal {
+    background: white;
+    border-radius: var(--radius-lg);
+    width: 92%;
+    max-width: 760px;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    animation: slideUp 0.3s ease-out;
+}
+
+.product-create-section,
+.product-list-section {
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.product-create-section h3,
+.product-list-section h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    color: var(--text);
+    font-weight: 600;
+}
+
+.product-create-section h3::after,
+.product-list-section h3::after { display: none; }
+
+.product-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.product-form input,
+.product-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 13px;
+}
+
+.product-form textarea { resize: vertical; }
+
+.product-form > .action-btn {
+    align-self: flex-start;
+    color: #059669;
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+    flex-direction: row;
+    padding: 8px 16px;
+}
+
+.product-form > .action-btn:hover:not(:disabled) {
+    background: #d1fae5;
+    border-color: #6ee7b7;
+}
+
+.product-search-input {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 6px 10px;
+    font-size: 13px;
+    min-width: 220px;
+}
+
+.admin-product-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.admin-product-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    flex-wrap: wrap;
+}
+
+.admin-product-row-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.admin-product-row-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.admin-product-row-meta {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+.admin-product-row-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.admin-product-row-actions .action-btn {
+    flex-direction: row;
+    padding: 6px 12px;
+    font-size: 12px;
+}
+
+.product-edit-form {
+    width: 100%;
+}
+
+.load-more-btn {
+    flex-direction: row;
+    width: 100%;
+    margin-top: 12px;
+    padding: 10px;
+}
+
 /* ========== RESPONSIVE ========== */
 @media (max-width: 900px) {
     .auth-page {
@@ -2017,7 +2320,9 @@ input:disabled {
         right: 16px;
     }
 
-    .admin-cache-modal { width: 95%; max-height: 90vh; }
+    .admin-product-toggle-btn { right: 72px; }
+
+    .admin-cache-modal, .admin-product-modal { width: 95%; max-height: 90vh; }
     .admin-modal-header { padding: 16px; }
     .admin-modal-header h2 { font-size: 17px; }
     .stats-grid { grid-template-columns: repeat(2, 1fr); }

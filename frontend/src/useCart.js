@@ -36,7 +36,7 @@ export function useCart(user, showToast) {
         if (!user) return;
         if (isInitial) setCartLoading(true);
         try {
-            const data = await fetchCart(user.user_id);
+            const data = await fetchCart(user.token);
             setCart(data.items || []);
             setCartCount(data.count || 0);
             setCartTotal(data.total || 0);
@@ -97,7 +97,7 @@ export function useCart(user, showToast) {
             }
 
             cartInflight.current.add(productId);
-            updateCart(user.user_id, productId, netQuantity)
+            updateCart(user.token, productId, netQuantity)
                 .then(() => fetchCartData())
                 .catch(err => {
                     toastApiError(err, 'Cart update failed');
@@ -115,7 +115,7 @@ export function useCart(user, showToast) {
     const clearCartHandler = async () => {
         setClearCartLoading(true);
         try {
-            await clearCart(user.user_id);
+            await clearCart(user.token);
             await fetchCartData();
         } catch (error) {
             toastApiError(error, 'Failed to clear cart');

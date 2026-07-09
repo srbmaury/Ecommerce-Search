@@ -30,8 +30,13 @@ def build_user_profiles() -> Dict[str, dict]:
         }
     }
     """
-    events = get_events_df()
-    products = get_products_df()
+    # get_products_df/get_events_df default to limit=1000, a safety cap meant
+    # for interactive API calls. Batch ML training needs the full catalog/
+    # history, or most events end up referencing products outside the
+    # truncated (popularity-ordered) product sample — undercounting real
+    # signal and looking like data corruption.
+    events = get_events_df(limit=None)
+    products = get_products_df(limit=None)
 
     if events.empty or products.empty:
         logger.warning("Events or products table is empty")
@@ -40,8 +45,12 @@ def build_user_profiles() -> Dict[str, dict]:
     events = events.copy()
     products = products.copy()
 
-    events["product_id"] = events["product_id"].astype(str)
-    products["product_id"] = products["product_id"].astype(str)
+    # events.product_id loads as float64 (nullable column) vs products.product_id
+    # as int64 — casting straight to str gives "16923.0" vs "16923", which never
+    # match and silently merge to nothing. Go through nullable Int64 first so
+    # both sides render identically.
+    events["product_id"] = events["product_id"].astype("Int64").astype(str)
+    products["product_id"] = products["product_id"].astype("Int64").astype(str)
     # Normalize category casing so profile keys match intent-detection output
     products["category"] = products["category"].fillna("").str.strip()
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { fetchAnalytics } from './api';
 
-export function useAnalytics(userId) {
+export function useAnalytics(token) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [summary, setSummary] = useState({});
@@ -11,7 +11,7 @@ export function useAnalytics(userId) {
     useEffect(() => {
         setLoading(true);
         setError(null);
-        fetchAnalytics(userId)
+        fetchAnalytics(token)
             .then(data => {
                 if (data.error) throw new Error(data.error);
                 setSummary(data.summary || {});
@@ -23,7 +23,7 @@ export function useAnalytics(userId) {
                 setError(e.message);
                 setLoading(false);
             });
-    }, [userId]);
+    }, [token]);
 
     // Memoize data transformations for charts
     const chartData = useMemo(() => ({

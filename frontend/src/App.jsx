@@ -14,8 +14,10 @@ import FiltersBar from './FiltersBar';
 import ProductGrid from './ProductGrid';
 import { Loading, EmptyState, SkeletonGrid } from './LoadingEmptyState';
 import AdminCacheManager from './AdminCacheManager';
+import AdminProductManager from './AdminProductManager';
 import './App.css';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import { setUnauthorizedHandler } from './api';
 
 function getGreeting() {
 	const h = new Date().getHours();
@@ -53,6 +55,7 @@ export default function App() {
 		email,
 		setEmail,
 		authError,
+		setAuthError,
 		authSuccess,
 		authLoading,
 		authView,
@@ -95,6 +98,21 @@ export default function App() {
 		};
 	}, []);
 
+	// A 401 from any authenticated call means the session token is missing,
+	// expired, or invalid — log out and return to the login screen instead
+	// of leaving the user stuck on a dashboard where every request fails.
+	// logout() switches to the unauthenticated view, which doesn't render
+	// <Toast>, so the message goes through AuthForm's authError slot instead.
+	useEffect(() => {
+		setUnauthorizedHandler(() => {
+			if (!user) return;
+			logout();
+			setIsSignup(false); // land on Login, not Signup — they already have an account
+			setAuthError('Your session expired. Please log in again.');
+		});
+		return () => setUnauthorizedHandler(null);
+	}, [user, logout, setIsSignup, setAuthError]);
+
 	/* ---------- SEARCH ---------- */
 	const {
 		query,
@@ -120,9 +138,12 @@ export default function App() {
 		paginatedResults,
 		hasMoreResults,
 		isLoadingMore,
+		totalMatches,
 		search,
 		appliedIntent,
 	} = useSearch(user, showToast);
+
+	const filtersActive = Boolean(categoryFilter || minPrice || maxPrice);
 
 	const clearFilters = useCallback(() => {
 		setCategoryFilter('');
@@ -265,12 +286,15 @@ export default function App() {
 			<Toast toast={toast} />
 			{/* Admin Cache Manager (only visible to admins) */}
 			<AdminCacheManager user={user} />
+			{/* Admin Product Manager (only visible to admins) */}
+			<AdminProductManager user={user} />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}
 				onClose={() => setSelectedProduct(null)}
 				onCartUpdate={handleCartUpdate}
 				cartQuantity={selectedProduct ? getCartQuantity(selectedProduct.product_id) : 0}
+				user={user}
 			/>
 
 			<main className="container">
@@ -295,7 +319,11 @@ export default function App() {
 					)}
 					{!searchLoading && results !== null && (
 						<section>
-							<h3>🔍 Search Results ({filteredResults.length} products)</h3>
+							<h3>
+							🔍 Search Results ({filtersActive
+								? `${filteredResults.length} matching filters, out of ${totalMatches} total`
+								: `${totalMatches} products`})
+						</h3>
 							{appliedIntent && appliedIntent.length > 0 && (
 								<div className="intent-chips">
 									<span className="intent-chips-label">Interpreted as:</span>
@@ -325,7 +353,7 @@ export default function App() {
 								<>
 									<ProductGrid
 										products={paginatedResults}
-										userId={user.user_id}
+										token={user.token}
 										query={query}
 										onCartUpdate={handleCartUpdate}
 										onProductClick={setSelectedProduct}
@@ -362,7 +390,7 @@ export default function App() {
 							) : (
 								<ProductGrid
 									products={recent}
-									userId={user.user_id}
+									token={user.token}
 									query=""
 									onCartUpdate={handleCartUpdate}
 									onProductClick={setSelectedProduct}
@@ -383,7 +411,7 @@ export default function App() {
 							) : (
 								<ProductGrid
 									products={recommended}
-									userId={user.user_id}
+									token={user.token}
 									query=""
 									isRecommendation
 									onCartUpdate={handleCartUpdate}

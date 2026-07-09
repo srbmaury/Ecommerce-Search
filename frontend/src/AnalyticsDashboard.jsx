@@ -3,7 +3,7 @@ import { useAnalytics } from './useAnalytics';
 import { GroupMetricsChart, ConversionChart, ClusterChart, TopQueriesChart } from './AnalyticsCharts';
 
 export default function AnalyticsDashboard({ user }) {
-    const { loading, error, chartData } = useAnalytics(user?.user_id);
+    const { loading, error, chartData } = useAnalytics(user?.token);
 
     if (loading) return <div className="loading">Loading analytics...</div>;
     if (error) return <div className="analytics-error">{error}</div>;

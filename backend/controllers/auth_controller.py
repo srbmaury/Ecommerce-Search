@@ -29,6 +29,7 @@ from backend.services.email_service import (
     get_user_by_email,
     update_user_password,
 )
+from backend.utils.auth_token import create_token
 
 
 EXPERIMENT_GROUPS = ("A", "B")
@@ -130,8 +131,13 @@ def signup_controller(data):
 
     # Send verification email asynchronously so signup doesn't block on SMTP
     if email:
-        token = create_email_verification_token(user.user_id)
-        _send_email_async(send_verification_email, email, username, token)
+        verification_token = create_email_verification_token(user.user_id)
+        _send_email_async(send_verification_email, email, username, verification_token)
+
+    # Only issue a usable session token when no email verification is
+    # pending — otherwise signup would let a user bypass verification
+    # entirely by auto-authenticating with the response.
+    session_token = create_token(user.user_id) if not email else None
 
     return jsonify({
         "user_id": user.user_id,
@@ -139,6 +145,7 @@ def signup_controller(data):
         "group": user.group,
         "email_verified": user.email_verified,
         "is_admin": is_admin(user.user_id),
+        "token": session_token,
     })
 
 
@@ -175,6 +182,7 @@ def login_controller(data):
         "group": user.group,
         "email_verified": user.email_verified,
         "is_admin": is_admin(user.user_id),
+        "token": create_token(user.user_id),
     })
 
 

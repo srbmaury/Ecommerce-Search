@@ -38,16 +38,21 @@ export function useAuth() {
         setAuthLoading(true);
         try {
             if (isSignup) {
-                await signup(username, password, email || null);
-                setAuthSuccess(
-                    email
-                        ? 'Account created! Check your email to verify before logging in.'
-                        : 'Account created! You can now log in.'
-                );
-                setIsSignup(false);
-                setUsername('');
-                setPassword('');
-                setEmail('');
+                const data = await signup(username, password, email || null);
+                if (data.token) {
+                    // No email verification pending — log the user in directly
+                    // instead of making them re-enter credentials on a second screen.
+                    setUser(data);
+                    setUsername('');
+                    setPassword('');
+                    setEmail('');
+                } else {
+                    setAuthSuccess('Account created! Check your email to verify before logging in.');
+                    setIsSignup(false);
+                    setUsername('');
+                    setPassword('');
+                    setEmail('');
+                }
             } else {
                 const data = await login(username, password);
                 setUser(data);

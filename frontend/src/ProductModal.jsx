@@ -1,8 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { formatPrice, getCategoryColor, getCategoryEmoji } from './utils';
 import StarRating from './StarRating';
+import ProductReviews from './ProductReviews';
 
-export default function ProductModal({ product, onClose, onCartUpdate, cartQuantity = 0 }) {
+export default function ProductModal({ product, onClose, onCartUpdate, cartQuantity = 0, user }) {
     const firstFocusRef = useRef(null);
     const modalRef = useRef(null);
 
@@ -74,6 +75,8 @@ export default function ProductModal({ product, onClose, onCartUpdate, cartQuant
                         </div>
                     )}
                 </div>
+
+                <ProductReviews productId={product.product_id} user={user} />
             </div>
         </div>
     );

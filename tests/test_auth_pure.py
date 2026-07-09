@@ -78,7 +78,8 @@ class TestSignupValidation:
         with patch("backend.controllers.auth_controller.create_user", return_value=mock_user), \
              patch("backend.controllers.auth_controller.create_email_verification_token", return_value="tok"), \
              patch("backend.controllers.auth_controller._send_email_async"), \
-             patch("backend.controllers.auth_controller.is_admin", return_value=False):
+             patch("backend.controllers.auth_controller.is_admin", return_value=False), \
+             patch.dict(os.environ, {"SECRET_KEY": "test-secret-key"}):
             import flask
             app = flask.Flask(__name__)
             with app.app_context():

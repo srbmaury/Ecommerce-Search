@@ -4,7 +4,9 @@ from backend.services.db_event_service import get_events_df
 
 def ab_analytics() -> pd.DataFrame:
     """Analyze A/B test results from database and return metrics per group."""
-    df = get_events_df()
+    # limit=None: A/B report over all history, not an interactive lookup —
+    # see backend/controllers/analytics_controller.py for the same fix.
+    df = get_events_df(limit=None)
 
     required_cols = {"group", "user_id", "event", "query"}
     if not required_cols.issubset(df.columns):

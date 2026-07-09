@@ -4,7 +4,12 @@ from typing import Union
 
 
 # ---- Feature scaling constants (explicit & documented) ----
-MAX_POPULARITY = 10_000
+# Observed product popularity in this dataset ranges ~500-240,000 (avg ~95k).
+# The old ceiling of 10,000 sat below almost every product, so popularity_norm
+# clamped to 1.0 for most of the catalog and stopped differentiating results.
+# 300,000 leaves headroom above the observed max so log1p scaling stays
+# meaningful across the real range.
+MAX_POPULARITY = 300_000
 MAX_RATING = 5.0
 FRESHNESS_DECAY_DAYS = 365
 

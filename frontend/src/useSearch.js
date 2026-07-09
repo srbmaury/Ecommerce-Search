@@ -24,6 +24,10 @@ export function useSearch(user, showToast) {
     const [nextCursor, setNextCursor] = useState(null);
     const [hasMoreResults, setHasMoreResults] = useState(false);
     const [isLoadingMore, setIsLoadingMore] = useState(false);
+    // True total match count from the backend — distinct from
+    // filteredResults.length, which is only how many have been loaded
+    // client-side so far and grows as pagination prefetches more.
+    const [totalMatches, setTotalMatches] = useState(0);
 
     // Abort controller for cancelling in-flight searches
     const searchAbortRef = useRef(null);
@@ -33,7 +37,7 @@ export function useSearch(user, showToast) {
     const categories = ['Audio', 'Electronics', 'Computers', 'Photography', 'Accessories', 'Gaming', 'Networking', 'Smart Home', 'Storage'];
 
     const loadSearchPage = useCallback(async (cursor, append = false, signal = undefined) => {
-        const data = await searchProducts(query, user.user_id, {
+        const data = await searchProducts(query, user.token, {
             cursor,
             limit: SEARCH_PAGE_SIZE,
             signal,
@@ -60,6 +64,9 @@ export function useSearch(user, showToast) {
         const pagination = data.pagination || {};
         setNextCursor(pagination.next_cursor ?? null);
         setHasMoreResults(Boolean(pagination.has_more));
+        if (typeof pagination.total === 'number') {
+            setTotalMatches(pagination.total);
+        }
 
         return data;
     }, [query, user?.user_id]);
@@ -195,7 +202,7 @@ export function useSearch(user, showToast) {
     useEffect(() => {
         if (!user) return;
         setRecsLoading(true);
-        fetchRecommendations(user.user_id)
+        fetchRecommendations(user.token)
             .then((d) => {
                 setRecent(d.recent || []);
                 setRecommended(d.similar || []);
@@ -253,6 +260,7 @@ export function useSearch(user, showToast) {
         paginatedResults,
         hasMoreResults,
         isLoadingMore,
+        totalMatches,
 
         // Functions
         search,
