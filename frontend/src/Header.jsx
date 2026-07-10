@@ -5,30 +5,28 @@ export default function Header({
     onShowCart,
     cartCount,
     onLogout,
-    fetchCart,
     user
 }) {
     return (
         <header className="topbar">
-            {onShowAnalytics && (
-                <button
-                    className="analytics-btn"
-                    onClick={onShowAnalytics}
-                >
-                    📊 Analytics Dashboard
-                </button>
-            )}
+            <div className="topbar-brand">
+                <span className="brand-logo">🛍️</span>
+                <span className="brand-name">Ecommerce-Search</span>
+            </div>
             <div className="topbar-right">
+                {onShowAnalytics && (
+                    <button className="analytics-btn" onClick={onShowAnalytics}>
+                        📊 Analytics
+                    </button>
+                )}
                 <button
                     className="cart-btn"
-                    onClick={() => { onShowCart(); if (fetchCart && user) fetchCart(user.user_id); }}
+                    onClick={onShowCart}
                 >
-                    🛒 Cart ({cartCount})
+                    🛒 Cart
+                    {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
                 </button>
-                <button
-                    className="logout-btn"
-                    onClick={onLogout}
-                >
+                <button className="logout-btn" onClick={onLogout}>
                     Logout
                 </button>
             </div>

@@ -1,8 +1,8 @@
 
 import API_BASE_URL from './config';
 
-function adminHeaders(userId) {
-    return { 'X-User-ID': userId };
+function authHeaders(token) {
+    return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function buildUrl(path, params = {}) {
@@ -32,46 +32,62 @@ async function handleResponse(res, fallbackMessage) {
     return data;
 }
 
+// Fired when an authenticated call comes back 401 (missing/expired/invalid
+// token) so the app can log the user out and return them to the login
+// screen, instead of leaving them on a dashboard that just keeps failing.
+// Not used for 403 (valid session, insufficient permission) or for the
+// login/signup endpoints themselves, which 401 for "wrong password".
+let unauthorizedHandler = null;
+
+export function setUnauthorizedHandler(fn) {
+    unauthorizedHandler = fn;
+}
+
+async function handleAuthedResponse(res, fallbackMessage) {
+    if (res.status === 401 && unauthorizedHandler) {
+        unauthorizedHandler();
+    }
+    return handleResponse(res, fallbackMessage);
+}
+
 // API utility for recommendations
-export async function fetchRecommendations(userId) {
-    const res = await fetch(buildUrl('/recommendations', { user_id: userId }));
-    return handleResponse(res, 'Failed to fetch recommendations');
+export async function fetchRecommendations(token) {
+    const res = await fetch(buildUrl('/recommendations'), { headers: authHeaders(token) });
+    return handleAuthedResponse(res, 'Failed to fetch recommendations');
 }
 
 // Search products
-export async function searchProducts(query, userId, options = {}) {
-    const { cursor = 0, limit } = options;
+export async function searchProducts(query, token, options = {}) {
+    const { cursor = 0, limit, signal } = options;
     const res = await fetch(buildUrl('/search', {
         q: query,
-        user_id: userId,
         cursor,
         limit,
-    }));
+    }), { signal, headers: authHeaders(token) });
     return handleResponse(res, 'Failed to search products');
 }
 
 // Cart APIs
-export async function fetchCart(userId) {
-    const res = await fetch(buildUrl('/cart', { user_id: userId }));
-    return handleResponse(res, 'Failed to fetch cart');
+export async function fetchCart(token) {
+    const res = await fetch(buildUrl('/cart'), { headers: authHeaders(token) });
+    return handleAuthedResponse(res, 'Failed to fetch cart');
 }
 
-export async function updateCart(userId, productId, quantity) {
+export async function updateCart(token, productId, quantity) {
     const res = await fetch(`${API_BASE_URL}/cart/update`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, product_id: productId, quantity })
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify({ product_id: productId, quantity })
     });
-    return handleResponse(res, 'Failed to update cart');
+    return handleAuthedResponse(res, 'Failed to update cart');
 }
 
-export async function clearCart(userId) {
+export async function clearCart(token) {
     const res = await fetch(`${API_BASE_URL}/cart/clear`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId })
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
     });
-    return handleResponse(res, 'Failed to clear cart');
+    return handleAuthedResponse(res, 'Failed to clear cart');
 }
 
 // Auth APIs
@@ -134,19 +150,20 @@ export async function resetPassword(token, password) {
     return handleResponse(res, 'Reset failed');
 }
 
-// Analytics API
-export async function fetchAnalytics() {
-    const res = await fetch(`${API_BASE_URL}/analytics`);
-    return handleResponse(res, 'Failed to fetch analytics');
+// Analytics API (admin-only: requires a valid session token)
+export async function fetchAnalytics(token) {
+    const res = await fetch(`${API_BASE_URL}/analytics`, {
+        headers: authHeaders(token),
+    });
+    return handleAuthedResponse(res, 'Failed to fetch analytics');
 }
 
 // Event logging
-export async function logEvent(eventType, productId, query, userId) {
+export async function logEvent(eventType, productId, query, token) {
     const res = await fetch(`${API_BASE_URL}/event`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
         body: JSON.stringify({
-            user_id: userId,
             query: query || '',
             product_id: productId,
             event: eventType
@@ -155,26 +172,83 @@ export async function logEvent(eventType, productId, query, userId) {
     return handleResponse(res, 'Failed to log event');
 }
 
-// Admin Cache Management APIs
-export async function fetchAdminCacheDashboard(userId) {
-    const res = await fetch(buildUrl('/admin/cache/dashboard'), {
-        headers: adminHeaders(userId),
-    });
-    return handleResponse(res, 'Failed to fetch admin cache dashboard');
+// Reviews APIs
+export async function fetchProductReviews(productId) {
+    const res = await fetch(buildUrl(`/products/${productId}/reviews`));
+    return handleResponse(res, 'Failed to fetch reviews');
 }
 
-export async function invalidateCacheEndpoint(endpoint, userId) {
+export async function submitProductReview(productId, rating, comment, token) {
+    const res = await fetch(`${API_BASE_URL}/products/${productId}/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify({ rating, comment })
+    });
+    return handleAuthedResponse(res, 'Failed to submit review');
+}
+
+export async function deleteProductReview(productId, token) {
+    const res = await fetch(`${API_BASE_URL}/products/${productId}/reviews`, {
+        method: 'DELETE',
+        headers: authHeaders(token),
+    });
+    return handleAuthedResponse(res, 'Failed to delete review');
+}
+
+// Admin Product Management APIs
+export async function fetchAdminProducts(token, { search, cursor, limit } = {}) {
+    const res = await fetch(buildUrl('/admin/products', { q: search, cursor, limit }), {
+        headers: authHeaders(token),
+    });
+    return handleAuthedResponse(res, 'Failed to fetch products');
+}
+
+export async function createAdminProduct(payload, token) {
+    const res = await fetch(`${API_BASE_URL}/admin/products`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify(payload)
+    });
+    return handleAuthedResponse(res, 'Failed to create product');
+}
+
+export async function updateAdminProduct(productId, payload, token) {
+    const res = await fetch(`${API_BASE_URL}/admin/products/${productId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+        body: JSON.stringify(payload)
+    });
+    return handleAuthedResponse(res, 'Failed to update product');
+}
+
+export async function deleteAdminProduct(productId, token) {
+    const res = await fetch(`${API_BASE_URL}/admin/products/${productId}`, {
+        method: 'DELETE',
+        headers: authHeaders(token),
+    });
+    return handleAuthedResponse(res, 'Failed to delete product');
+}
+
+// Admin Cache Management APIs
+export async function fetchAdminCacheDashboard(token) {
+    const res = await fetch(buildUrl('/admin/cache/dashboard'), {
+        headers: authHeaders(token),
+    });
+    return handleAuthedResponse(res, 'Failed to fetch admin cache dashboard');
+}
+
+export async function invalidateCacheEndpoint(endpoint, token) {
     const res = await fetch(`${API_BASE_URL}/admin/cache/${endpoint}`, {
         method: 'POST',
-        headers: adminHeaders(userId),
+        headers: authHeaders(token),
     });
-    return handleResponse(res, 'Failed to invalidate cache');
+    return handleAuthedResponse(res, 'Failed to invalidate cache');
 }
 
-export async function resetCacheStats(userId) {
+export async function resetCacheStats(token) {
     const res = await fetch(`${API_BASE_URL}/admin/cache/reset-stats`, {
         method: 'POST',
-        headers: adminHeaders(userId),
+        headers: authHeaders(token),
     });
-    return handleResponse(res, 'Failed to reset cache stats');
+    return handleAuthedResponse(res, 'Failed to reset cache stats');
 }

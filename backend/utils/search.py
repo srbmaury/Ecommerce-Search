@@ -28,20 +28,30 @@ from ml.model import predict_score
 
 CACHE_SECONDS = 300
 RANKED_CACHE_SECONDS = 120
+RECENT_BOOST_CACHE_SECONDS = 30
 FUZZY_MATCH_THRESHOLD = 0.7
 
-RECENT_BOOST_BASE = 1.0
-RECENT_BOOST_DECAY = 0.15
+# Recent boost: multiplicative, max 20% for most-recently-viewed item,
+# decaying by 2% per position. Additive boosts can dominate ML scores when
+# score magnitudes are small; a percentage multiplier is scale-invariant.
+RECENT_BOOST_MAX = 0.20
+RECENT_BOOST_DECAY = 0.02
 CLUSTER_BOOST_WEIGHT = 0.5
 
 
 # ---------- HELPERS ----------
 
 def user_category_score(profile: dict, category: str) -> float:
-    """Get user's preference score for a category."""
+    """Get user's preference score for a category (case-insensitive)."""
     if not profile:
         return 0.0
-    return profile.get("category_pref", {}).get(category, 0.0)
+    cat_pref = profile.get("category_pref", {})
+    # Strip + case-insensitive match guards against DB/intent casing drift
+    target = (category or "").strip().lower()
+    for k, v in cat_pref.items():
+        if k.strip().lower() == target:
+            return v
+    return 0.0
 
 
 def user_price_affinity(profile: dict, price: float) -> float:
@@ -49,7 +59,7 @@ def user_price_affinity(profile: dict, price: float) -> float:
     if not profile:
         return 0.0
     avg_price = profile.get("avg_price")
-    if not avg_price:
+    if avg_price is None:
         return 0.0
     denom = max(abs(avg_price), 1.0)
     return max(0.0, 1.0 - abs(price - avg_price) / denom)
@@ -67,6 +77,14 @@ def _fuzzy_match(text: str, query_words: List[str]) -> bool:
 
 
 def _get_recent_boost(user_id: str) -> dict[int, float]:
+    if not user_id:
+        return {}
+
+    cache_key = f"recent_boost:{user_id}"
+    cached = redis_get_json(cache_key, count_stats=False)
+    if isinstance(cached, dict):
+        return {int(k): v for k, v in cached.items()}
+
     boosts = {}
     try:
         df = get_events_df(
@@ -74,16 +92,15 @@ def _get_recent_boost(user_id: str) -> dict[int, float]:
             event_types=["click", "add_to_cart"],
             limit=10,
         )
-        if df.empty:
-            return boosts
-
-        for i, row in enumerate(df.itertuples()):
-            boosts[int(row.product_id)] = (
-                RECENT_BOOST_BASE - RECENT_BOOST_DECAY * i
-            )
+        if not df.empty:
+            for i, row in enumerate(df.itertuples()):
+                # Multiplicative percentage boost: 20% for rank-0, decays by 2% per rank
+                boosts[int(row.product_id)] = max(0.0, RECENT_BOOST_MAX - RECENT_BOOST_DECAY * i)
     except Exception:
         pass
 
+    # Cache with short TTL — invalidated by cache_invalidation.py on new events
+    redis_setex_json(cache_key, {str(k): v for k, v in boosts.items()}, RECENT_BOOST_CACHE_SECONDS)
     return boosts
 
 
@@ -119,54 +136,77 @@ def search_products(
     cluster=None,
     ab_group="A",
     limit=None,
+    category: str = None,
 ):
-    # Cache base query candidates (non-personalized)
-    base_cache_key = f"search_products:{query_hash(query)}:base"
+    # Cache base query candidates (non-personalized).
+    # Key includes category so category-expanded results cache separately.
+    cat_key = category.lower() if category else "none"
+    base_cache_key = f"search_products:{query_hash(query)}:{cat_key}:base"
     ranked_cache_key = _ranked_cache_key(query, user_id, cluster, ab_group)
 
     cached_ranked = redis_get_json(ranked_cache_key)
     if isinstance(cached_ranked, list):
         return cached_ranked[:limit] if limit is not None else cached_ranked
 
-    cache_key = base_cache_key
-    cached_products = redis_get_json(cache_key)
-    
+    cached_products = redis_get_json(base_cache_key, count_stats=False)
+
     if cached_products:
-        # Cache hit: Apply personalization at app level
         products = cached_products
     else:
-        # Cache miss: Query database
+        # Text search
         products_df = get_products_df(search_query=query)
-        if products_df is None or products_df.empty:
+        seen_ids: set[int] = set()
+        products = []
+
+        def _df_to_rows(df):
+            rows = []
+            for _, r in df.iterrows():
+                pid = int(r.product_id)
+                if pid in seen_ids:
+                    continue
+                seen_ids.add(pid)
+                rows.append({
+                    "product_id": pid,
+                    "title": r.title,
+                    "description": r.description,
+                    "price": r.price,
+                    "category": r.category,
+                    "rating": float(r.rating),
+                    "popularity": float(r.popularity),
+                    "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at),
+                })
+            return rows
+
+        if products_df is not None and not products_df.empty:
+            products.extend(_df_to_rows(products_df))
+
+        # Category expansion: when intent detected a category (e.g. "laptops" →
+        # "Computers"), fetch ALL products in that category so results aren't
+        # limited to those that literally contain the word "laptop".
+        if category:
+            cat_df = get_products_df(category_filter=category)
+            if cat_df is not None and not cat_df.empty:
+                products.extend(_df_to_rows(cat_df))
+
+        if not products:
             return []
-        
-        # Convert to list format for caching
-        products = [
-            {
-                "product_id": int(r.product_id),
-                "title": r.title,
-                "description": r.description,
-                "price": r.price,
-                "category": r.category,
-                "rating": float(r.rating),
-                "popularity": float(r.popularity),
-                "created_at": r.created_at.isoformat() if hasattr(r.created_at, 'isoformat') else str(r.created_at),
-            }
-            for _, r in products_df.iterrows()
-        ]
-        
-        # Cache base products (no personalization) for 5 minutes
-        redis_setex_json(cache_key, products, CACHE_SECONDS)
+
+        redis_setex_json(base_cache_key, products, CACHE_SECONDS)
 
     # Get user context for personalization (happens after cache hit)
     profiles = get_profiles()
     profile = profiles.get(user_id, {})
 
-    # --- Text filtering (includes category) ---
+    # --- Fuzzy text filtering ---
+    # Products whose category exactly matches the intent-detected category are
+    # automatically included — they are semantically relevant even if their
+    # title doesn't contain the query word (e.g. "MacBook Pro" for "laptops").
+    category_lower = category.lower() if category else None
     query_words = [w for w in query.lower().split() if w]
     filtered = [
         row for row in products
-        if _fuzzy_match(f"{row['title']} {row['description']} {row['category']}", query_words)
+        if (category_lower and (row.get("category") or "").lower() == category_lower)
+        or _fuzzy_match(f"{row['title']} {row['description']} {row.get('category') or ''}", query_words)
     ]
 
     # --- Group B: simple popularity ---
@@ -201,29 +241,26 @@ def search_products(
     for r in filtered:
         cat_pref = profile.get("category_pref", {}).get(r["category"], 0)
         cl_boost = cluster_boost.get(r["category"], 0)
-
-        avg_price = profile.get("avg_price")
-        price_affinity = 0
-        if avg_price:
-            denom = max(abs(avg_price), 1.0)
-            price_affinity = max(0, 1 - abs(r["price"] - avg_price) / denom)
+        # Cap combined category signal to [0, 1] — the two components share the same scale
+        category_score = min(1.0, cat_pref + CLUSTER_BOOST_WEIGHT * cl_boost)
 
         # Convert created_at string to datetime if needed for features
         created_at = r.get("created_at")
         if isinstance(created_at, str):
-            from datetime import datetime
             created_at = datetime.fromisoformat(created_at)
 
         features = build_features(
             popularity=r["popularity"],
             rating=r["rating"],
             created_at=created_at,
-            category_score=cat_pref + CLUSTER_BOOST_WEIGHT * cl_boost,
-            price_affinity=price_affinity,
+            category_score=category_score,
+            price_affinity=user_price_affinity(profile, r["price"]),
         )
 
         score = predict_score(features)
-        score += recent_boost.get(int(r["product_id"]), 0)
+        # Multiplicative recent boost: scale-invariant regardless of model score magnitude
+        boost_pct = recent_boost.get(int(r["product_id"]), 0)
+        score *= (1.0 + boost_pct)
 
         results.append({
             "product_id": int(r["product_id"]),

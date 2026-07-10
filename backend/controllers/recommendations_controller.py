@@ -16,9 +16,11 @@ from ml.model import predict_score
 # ---------- CONFIG ----------
 
 CACHE_DURATION_SECONDS = 300
-CANDIDATE_LIMIT = 200
 FINAL_LIMIT = 10
-MAX_PER_CATEGORY = 3
+DEFAULT_RECS_LIMIT = 10
+MAX_RECS_LIMIT = 50
+# Candidate pool: up to 500 products ranked; never exceeds actual catalogue size.
+_CANDIDATE_MAX = 500
 
 EVENT_TYPES = ("click", "add_to_cart")
 
@@ -58,7 +60,7 @@ def get_cluster_category_boost(cluster, profiles):
         return {}
 
     boost_key = f"cluster_boost:{cluster}"
-    cached = redis_get_json(boost_key)
+    cached = redis_get_json(boost_key, count_stats=False)
     if cached:
         return cached
 
@@ -80,9 +82,15 @@ def get_cluster_category_boost(cluster, profiles):
 
 # ---------- CONTROLLER ----------
 
-def recommendations_controller(user_id):
+def recommendations_controller(user_id, limit=None):
     if not user_id:
         return {"error": "user_id required"}, 400
+
+    try:
+        limit = int(limit) if limit is not None else DEFAULT_RECS_LIMIT
+        limit = max(1, min(limit, MAX_RECS_LIMIT))
+    except (TypeError, ValueError):
+        limit = DEFAULT_RECS_LIMIT
 
     cache_key = f"recommendations:{user_id}"
     cached = redis_get_json(cache_key)
@@ -105,53 +113,67 @@ def recommendations_controller(user_id):
     cluster_boost = get_cluster_category_boost(cluster, profiles)
 
     # ---- candidate generation ----
-    session = get_db_session()
-    try:
+    avg_price = profile.get("avg_price")
+    cat_pref_map = profile.get("category_pref", {})
+    recent_set = set(recent_ids)
+    scored = []
+
+    with get_db_session() as session:
+        total_products = session.query(Product.id).count()
+        candidate_limit = min(_CANDIDATE_MAX, total_products)
+
         candidates = (
             session.query(Product)
-            .filter(~Product.id.in_(recent_ids))
             .order_by(desc(Product.popularity))
-            .limit(CANDIDATE_LIMIT)
+            .limit(candidate_limit)
             .all()
         )
 
-        scored = []
-        avg_price = profile.get("avg_price")
-
         for p in candidates:
-            cat_pref = profile.get("category_pref", {}).get(p.category, 0)
+            cat_pref = cat_pref_map.get(p.category, 0)
             cluster_pref = cluster_boost.get(p.category, 0)
+            category_score = min(1.0, cat_pref + 0.5 * cluster_pref)
 
             price_affinity = 0.0
             if avg_price:
                 denom = max(abs(avg_price), 1.0)
-                price_affinity = max(
-                    0.0, 1.0 - abs(p.price - avg_price) / denom
-                )
+                price_affinity = max(0.0, 1.0 - abs(p.price - avg_price) / denom)
 
             features = build_features(
                 popularity=p.popularity,
                 rating=p.rating,
                 created_at=p.created_at,
-                category_score=cat_pref + 0.5 * cluster_pref,
+                category_score=category_score,
                 price_affinity=price_affinity,
             )
 
-            scored.append((p, predict_score(features)))
-    finally:
-        session.close()
+            base_score = predict_score(features)
+            if p.id in recent_set:
+                base_score *= 0.5
+
+            scored.append((p, base_score))
 
     # ---- rank + diversify ----
     scored.sort(key=lambda x: x[1], reverse=True)
 
     results = []
-    per_category = {}
+    per_category: dict[str, int] = {}
 
     for product, _ in scored:
-        if len(results) >= FINAL_LIMIT:
+        if len(results) >= limit:
             break
 
-        if per_category.get(product.category, 0) >= MAX_PER_CATEGORY:
+        # Per-category quota scales with user's stated preference:
+        # strong preference (>30%) → up to 5 slots; moderate → 3; cold-start → 2.
+        pref_weight = cat_pref_map.get(product.category, 0)
+        if pref_weight > 0.3:
+            quota = min(5, FINAL_LIMIT // 2)
+        elif pref_weight > 0.1:
+            quota = 3
+        else:
+            quota = 2
+
+        if per_category.get(product.category, 0) >= quota:
             continue
 
         results.append({

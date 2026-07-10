@@ -46,9 +46,15 @@ class User(Base):
 
     group = Column(String(10), default="A", index=True)
     cluster = Column(Integer, nullable=True, index=True)
+    cluster_updated_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=utcnow, nullable=False)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    # Set only on an explicit password change (not on signup). Session tokens
+    # issued before this timestamp are treated as revoked — see
+    # backend/utils/auth_token.py:is_token_stale.
+    password_changed_at = Column(DateTime, nullable=True)
 
     # Relationships
     search_events = relationship(
@@ -183,6 +189,45 @@ class SearchEvent(Base):
             f"<SearchEvent user_id={self.user_id} "
             f"type={self.event_type} ts={self.timestamp.isoformat()}>"
         )
+
+
+# ---------- REVIEW ----------
+
+class Review(Base):
+    """A user's rating/comment on a product. One review per user per product
+    — resubmitting updates the existing row (see backend/services/review)."""
+    __tablename__ = "reviews"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    product_id = Column(
+        Integer,
+        ForeignKey("products.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_id = Column(
+        String(50),
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    rating = Column(Integer, nullable=False)
+    comment = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+    product = relationship("Product", backref=backref("reviews", cascade="all, delete-orphan"))
+    user = relationship("User")
+
+    __table_args__ = (
+        Index("idx_review_product_user", "product_id", "user_id", unique=True),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Review product_id={self.product_id} user_id={self.user_id} rating={self.rating}>"
 
 
 # ---------- EMAIL VERIFICATION TOKEN ----------

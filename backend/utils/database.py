@@ -89,6 +89,7 @@ def create_tables():
     logger.info("Creating database tables")
     Base.metadata.create_all(bind=_engine)
     _refresh_product_search_vectors()
+    _ensure_password_changed_at_column()
     logger.info("Database tables created")
 
 
@@ -113,6 +114,30 @@ def _refresh_product_search_vectors():
 
     with _engine.begin() as conn:
         conn.execute(statement)
+
+
+def _ensure_password_changed_at_column():
+    """
+    Add users.password_changed_at if it's missing.
+
+    Base.metadata.create_all() only creates tables that don't exist yet — it
+    never alters an existing table, so a column added to the model after the
+    "users" table was already created (e.g. on the live Neon DB) needs this
+    one-off, idempotent ALTER TABLE to actually show up.
+    """
+    if _engine is None:
+        return
+
+    with _engine.begin() as conn:
+        if _engine.dialect.name == "postgresql":
+            conn.execute(text(
+                "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP"
+            ))
+        else:
+            # SQLite has no "ADD COLUMN IF NOT EXISTS" — check first.
+            existing = {row[1] for row in conn.execute(text("PRAGMA table_info(users)"))}
+            if "password_changed_at" not in existing:
+                conn.execute(text("ALTER TABLE users ADD COLUMN password_changed_at TIMESTAMP"))
 
 
 # ---------- SESSION ACCESS ----------

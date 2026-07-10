@@ -82,6 +82,7 @@ def apply_sort(products, sort_key):
         products.sort(key=lambda x: x.get("price", 0), reverse=True)
     elif sort_key == "rating":
         products.sort(key=lambda x: x.get("rating", 0), reverse=True)
+    return products
 
 
 # ---------- Controller ----------
@@ -110,7 +111,7 @@ def search_controller(query, raw_user_id, cursor_raw=None, limit_raw=None):
     timings["intent"] = (time.perf_counter() - t_intent) * 1000
     search_query = intent["clean_query"]
 
-    # -------- primary search --------
+    # -------- primary search (with category expansion) --------
     t_search = time.perf_counter()
     products = search_products(
         search_query,
@@ -118,25 +119,9 @@ def search_controller(query, raw_user_id, cursor_raw=None, limit_raw=None):
         cluster=cluster,
         ab_group=group,
         limit=None,
+        category=intent["suggested_category"],
     )
     timings["search_products"] = (time.perf_counter() - t_search) * 1000
-
-    # -------- category fallback --------
-    t_fallback = time.perf_counter()
-    if len(products) < MIN_RESULTS_THRESHOLD and intent["suggested_category"]:
-        category_products = search_products(
-            intent["suggested_category"],
-            user_id,
-            cluster=cluster,
-            ab_group=group,
-            limit=None,
-        )
-
-        existing_ids = {p["product_id"] for p in products}
-        for p in category_products:
-            if p["product_id"] not in existing_ids:
-                products.append(p)
-    timings["category_fallback"] = (time.perf_counter() - t_fallback) * 1000
 
     # -------- price filtering --------
     t_price = time.perf_counter()
@@ -149,7 +134,7 @@ def search_controller(query, raw_user_id, cursor_raw=None, limit_raw=None):
 
     # -------- sorting --------
     t_sort = time.perf_counter()
-    apply_sort(products, intent["suggested_sort"])
+    products = apply_sort(products, intent["suggested_sort"])
     timings["sort"] = (time.perf_counter() - t_sort) * 1000
 
     # -------- response --------

@@ -1,33 +1,36 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from backend.controllers.cart_controller import (
     get_cart_controller,
     clear_cart_controller,
     update_cart_controller
 )
-
+from backend.utils.auth_middleware import require_auth
+from backend.utils.rate_limit import limiter
 
 bp = Blueprint("cart", __name__, url_prefix="/api")
 
 
-@bp.route("/cart/update", methods=["POST", "OPTIONS"])
+@bp.route("/cart/update", methods=["POST"])
+@limiter.limit("60 per minute")
+@require_auth
 def update_cart():
-    if request.method == "OPTIONS":
-        return jsonify({"message": "CORS preflight successful"}), 200
-    resp, status = update_cart_controller(request.json or {})
+    data = dict(request.json or {})
+    data["user_id"] = g.user_id  # server-derived identity, not client-supplied
+    resp, status = update_cart_controller(data)
     return jsonify(resp), status
 
 
-@bp.route("/cart", methods=["GET", "OPTIONS"])
+@bp.route("/cart", methods=["GET"])
+@limiter.limit("120 per minute")
+@require_auth
 def get_cart():
-    if request.method == "OPTIONS":
-        return jsonify({"message": "CORS preflight successful"}), 200
-    resp, status = get_cart_controller(request.args.get("user_id"))
+    resp, status = get_cart_controller(g.user_id)
     return jsonify(resp), status
 
 
-@bp.route("/cart/clear", methods=["POST", "OPTIONS"])
+@bp.route("/cart/clear", methods=["POST"])
+@limiter.limit("20 per minute")
+@require_auth
 def clear_cart():
-    if request.method == "OPTIONS":
-        return jsonify({"message": "CORS preflight successful"}), 200
-    resp, status = clear_cart_controller(request.json or {})
+    resp, status = clear_cart_controller({"user_id": g.user_id})
     return jsonify(resp), status

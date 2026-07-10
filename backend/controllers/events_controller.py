@@ -1,9 +1,10 @@
 import logging
+import time
 
 from backend.utils.sanitize import sanitize_user_id
 from backend.services.db_user_manager import get_user_by_id
 from backend.services.db_event_service import create_search_event
-from backend.services.db_product_service import update_product_popularity
+from backend.services.db_product_service import update_product_popularity, get_product_by_id
 from backend.services.retrain_trigger import record_event
 from backend.services.cache_invalidation import invalidate_on_user_event
 
@@ -63,6 +64,7 @@ def resolve_user_context(raw_user_id):
 # ---------- Controller ----------
 
 def log_event_controller(data):
+    t0 = time.perf_counter()
     raw_user_id = data.get("user_id", "")
     event_type = normalize_event_type(data.get("event", ""))
     product_id = normalize_product_id(data.get("product_id", ""))
@@ -73,6 +75,13 @@ def log_event_controller(data):
 
     if product_id is None:
         return error_response("valid product_id required")
+
+    # Validate product exists before logging to prevent orphaned events
+    try:
+        if not get_product_by_id(product_id):
+            return error_response("product not found", 404)
+    except Exception:
+        pass  # DB unavailable — allow through rather than drop events
 
     user_id, group = resolve_user_context(raw_user_id)
     if user_id is None:
@@ -109,4 +118,6 @@ def log_event_controller(data):
         except Exception as e:
             logger.error(f"Cache invalidation failed (non-blocking): {e}")
 
+    elapsed = (time.perf_counter() - t0) * 1000
+    logger.info("log_event type=%s product=%s user=%s %.1fms", event_type, product_id, user_id, elapsed)
     return {"status": "logged"}, 200

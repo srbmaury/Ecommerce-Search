@@ -6,14 +6,13 @@ Provides admin endpoints for:
 - Manual cache invalidation
 - Cache maintenance operations
 
-All endpoints require X-User-ID (must be in ADMIN_USER_IDS).
+All endpoints require a valid session token whose user_id is in ADMIN_USER_IDS.
 """
 
 from flask import Blueprint, jsonify, g
 
 from backend.services.cache_invalidation import (
     get_cache_stats,
-    get_cache_hit_rate,
     reset_cache_stats,
     invalidate_all_search_caches,
     invalidate_all_recommendation_caches,
@@ -30,8 +29,8 @@ def cache_dashboard():
     """Get admin dashboard data (user info + cache stats)."""
     user = g.admin_user
     stats = get_cache_stats()
-    stats["hit_rate"] = round(get_cache_hit_rate(), 4)
-    
+    stats["hit_rate"] = round(stats["hit_rate"], 4)
+
     return jsonify({
         "admin": {
             "user_id": user.user_id,
@@ -47,7 +46,7 @@ def cache_dashboard():
 def cache_stats():
     """Get cache statistics."""
     stats = get_cache_stats()
-    stats["hit_rate"] = round(get_cache_hit_rate(), 4)
+    stats["hit_rate"] = round(stats["hit_rate"], 4)
     return jsonify(stats), 200
 
 

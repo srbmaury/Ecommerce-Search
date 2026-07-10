@@ -349,12 +349,18 @@ def get_user_by_email(email: str) -> Optional[User]:
 
 
 def update_user_password(user_id: str, password_hash: str) -> bool:
-    """Update a user's password."""
+    """
+    Update a user's password.
+
+    Also stamps password_changed_at so any session token issued before this
+    moment is treated as revoked (see auth_token.is_token_stale) — otherwise
+    a token that leaked before the reset would keep working regardless.
+    """
     session = get_db_session()
     try:
         result = session.query(User).filter(
             User.user_id == user_id
-        ).update({"password_hash": password_hash})
+        ).update({"password_hash": password_hash, "password_changed_at": utcnow()})
         session.commit()
         return result > 0
     except Exception as e:

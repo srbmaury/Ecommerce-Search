@@ -1,16 +1,18 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from backend.controllers.search_controller import search_controller
+from backend.utils.auth_middleware import optional_auth
+from backend.utils.rate_limit import limiter
 
 bp = Blueprint("search", __name__, url_prefix="/api")
 
 
-@bp.route("/search", methods=["GET", "OPTIONS"])
+@bp.route("/search", methods=["GET"])
+@limiter.limit("60 per minute")
+@optional_auth
 def search():
-    if request.method == "OPTIONS":
-        return {"message": "CORS preflight successful"}, 200
     resp, status = search_controller(
         request.args.get("q"),
-        request.args.get("user_id"),
+        g.user_id,  # server-derived; anonymous search stays anonymous
         request.args.get("cursor"),
         request.args.get("limit"),
     )

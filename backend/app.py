@@ -10,6 +10,7 @@ Responsibilities:
 """
 import os
 import logging
+import threading
 from dotenv import load_dotenv
 
 # Load .env before any other backend imports so module-level os.getenv() calls
@@ -22,6 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from backend.utils.response_time_logger import setup_response_time_logging
 from backend.utils.config import configure_cors
 from backend.utils.database import init_db, create_tables
+from backend.utils.rate_limit import limiter
 
 from backend.routes.auth_routes import bp as auth_bp
 from backend.routes.search_routes import bp as search_bp
@@ -30,6 +32,8 @@ from backend.routes.cart_routes import bp as cart_bp
 from backend.routes.analytics_routes import bp as analytics_bp
 from backend.routes.recommendations_routes import bp as rec_bp
 from backend.routes.cache_routes import bp as cache_bp
+from backend.routes.reviews_routes import bp as reviews_bp
+from backend.routes.products_admin_routes import bp as products_admin_bp
 
 
 # ---------- LOGGING ----------
@@ -40,6 +44,33 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("app")
+
+
+# ---------- ENV VAR VALIDATION ----------
+
+_REQUIRED_ENV_VARS = ["DATABASE_URL", "REDIS_URL", "SECRET_KEY"]
+_OPTIONAL_ENV_VARS = {
+    "ADMIN_USER_IDS": "admin features disabled",
+    "SMTP_HOST":      "email sending disabled",
+    "SMTP_PORT":      "email sending disabled",
+    "SMTP_USER":      "email sending disabled",
+    "SMTP_PASSWORD":  "email sending disabled",
+}
+
+
+def _validate_env():
+    missing = [v for v in _REQUIRED_ENV_VARS if not os.getenv(v)]
+    if missing:
+        raise EnvironmentError(
+            f"Required environment variables not set: {', '.join(missing)}. "
+            "Check your .env file."
+        )
+    for var, impact in _OPTIONAL_ENV_VARS.items():
+        if not os.getenv(var):
+            logger.warning("Optional env var %s not set — %s", var, impact)
+
+
+_validate_env()
 
 
 # ---------- APP FACTORY ----------
@@ -57,6 +88,7 @@ def create_app() -> Flask:
     _init_database()
     _configure_app(app)
     _register_routes(app)
+    _warmup_ml_state()
 
     return app
 
@@ -96,6 +128,10 @@ def _configure_app(app: Flask):
     # CORS
     configure_cors(app)
 
+    # Rate limiting (backed by Redis so limits hold across worker processes)
+    app.config["RATELIMIT_STORAGE_URI"] = os.getenv("REDIS_URL")
+    limiter.init_app(app)
+
     # Root route for frontend
     @app.route("/")
     def index():
@@ -112,6 +148,29 @@ def _register_routes(app: Flask):
     app.register_blueprint(analytics_bp)
     app.register_blueprint(rec_bp)
     app.register_blueprint(cache_bp)  # NEW: Cache management endpoints
+    app.register_blueprint(reviews_bp)
+    app.register_blueprint(products_admin_bp)
+
+
+def _warmup_ml_state():
+    """
+    Load the ranking model and build the user-profile cache in a background
+    thread at startup, instead of on the first incoming request. Previously
+    the first search after a fresh boot paid this cost inline (10-18s in
+    testing) with only a bare spinner shown to the user.
+    """
+    def _run():
+        try:
+            from ml.model import get_model
+            from backend.services.user_profile_service import get_profiles
+            logger.info("Warming up ranking model and user profile cache")
+            get_model()
+            get_profiles()
+            logger.info("Warmup complete")
+        except Exception:
+            logger.exception("Warmup failed (non-fatal — will load lazily on first request)")
+
+    threading.Thread(target=_run, daemon=True, name="MLWarmup").start()
 
 
 # ---------- WSGI ENTRYPOINT ----------

@@ -54,9 +54,21 @@ def predict_score(features: np.ndarray) -> float:
             return float(scores[0])
 
         except Exception:
-            logger.exception("Model prediction failed")
+            logger.exception(
+                "Model prediction failed (input shape: %s, expected features: 5)",
+                np.asarray([features]).shape,
+            )
 
-    # Fallback: heuristic relevance score
-    fallback_score = float(features[0])
+    # Fallback: weighted combination of all features so personalization
+    # signals (category, price) still contribute even without the ML model.
+    # Weights: popularity=0.40, rating=0.30, freshness=0.10,
+    #          category_score=0.15, price_affinity=0.05
+    fallback_score = (
+        0.40 * float(features[0])
+        + 0.30 * float(features[1])
+        + 0.10 * float(features[2])
+        + 0.15 * float(features[3])
+        + 0.05 * float(features[4])
+    )
     logger.debug("Using fallback score: %f", fallback_score)
     return fallback_score

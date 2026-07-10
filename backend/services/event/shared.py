@@ -15,7 +15,7 @@ def session_scope():
     try:
         yield session
         session.commit()
-        logger.info("session_scope: commit successful")
+        logger.debug("session_scope: commit successful")
     except Exception as e:
         logger.error(f"session_scope: rollback due to {e}")
         session.rollback()

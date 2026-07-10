@@ -12,10 +12,19 @@ import Header from './Header';
 import Toast from './Toast';
 import FiltersBar from './FiltersBar';
 import ProductGrid from './ProductGrid';
-import { Loading, EmptyState } from './LoadingEmptyState';
+import { Loading, EmptyState, SkeletonGrid } from './LoadingEmptyState';
 import AdminCacheManager from './AdminCacheManager';
+import AdminProductManager from './AdminProductManager';
 import './App.css';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import { setUnauthorizedHandler } from './api';
+
+function getGreeting() {
+	const h = new Date().getHours();
+	if (h < 12) return 'Good morning';
+	if (h < 17) return 'Good afternoon';
+	return 'Good evening';
+}
 
 export default function App() {
 	const initialRouteState = (() => {
@@ -35,7 +44,6 @@ export default function App() {
 	})();
 
 	const [showAnalytics, setShowAnalytics] = useState(false);
-	const [isAdmin, setIsAdmin] = useState(false);
 	const {
 		user,
 		isSignup,
@@ -47,6 +55,8 @@ export default function App() {
 		email,
 		setEmail,
 		authError,
+		setAuthError,
+		authSuccess,
 		authLoading,
 		authView,
 		setAuthView,
@@ -55,11 +65,6 @@ export default function App() {
 	} = useAuth();
 
 	const [urlToken, setUrlToken] = useState(initialRouteState.token);
-
-	// Reset admin state when user logs out
-	useEffect(() => {
-		if (!user) setIsAdmin(false);
-	}, [user]);
 
 	useEffect(() => {
 		if (initialRouteState.view !== 'auth') {
@@ -93,6 +98,21 @@ export default function App() {
 		};
 	}, []);
 
+	// A 401 from any authenticated call means the session token is missing,
+	// expired, or invalid — log out and return to the login screen instead
+	// of leaving the user stuck on a dashboard where every request fails.
+	// logout() switches to the unauthenticated view, which doesn't render
+	// <Toast>, so the message goes through AuthForm's authError slot instead.
+	useEffect(() => {
+		setUnauthorizedHandler(() => {
+			if (!user) return;
+			logout();
+			setIsSignup(false); // land on Login, not Signup — they already have an account
+			setAuthError('Your session expired. Please log in again.');
+		});
+		return () => setUnauthorizedHandler(null);
+	}, [user, logout, setIsSignup, setAuthError]);
+
 	/* ---------- SEARCH ---------- */
 	const {
 		query,
@@ -118,8 +138,19 @@ export default function App() {
 		paginatedResults,
 		hasMoreResults,
 		isLoadingMore,
-		search
+		totalMatches,
+		search,
+		appliedIntent,
 	} = useSearch(user, showToast);
+
+	const filtersActive = Boolean(categoryFilter || minPrice || maxPrice);
+
+	const clearFilters = useCallback(() => {
+		setCategoryFilter('');
+		setMinPrice('');
+		setMaxPrice('');
+		setSortBy('');
+	}, [setCategoryFilter, setMinPrice, setMaxPrice, setSortBy]);
 
 	/* ---------- CART ---------- */
 	const {
@@ -138,6 +169,31 @@ export default function App() {
 
 	/* ---------- PRODUCT DETAIL MODAL ---------- */
 	const [selectedProduct, setSelectedProduct] = useState(null);
+
+	/* ---------- DOCUMENT TITLE ---------- */
+	useEffect(() => {
+		const base = 'Ecommerce-Search';
+		if (selectedProduct) {
+			document.title = `${selectedProduct.title} — ${base}`;
+		} else if (results !== null && query.trim()) {
+			document.title = `${query.trim()} — ${base}`;
+		} else {
+			document.title = base;
+		}
+	}, [selectedProduct, results, query]);
+
+	/* ---------- ESC KEY ---------- */
+	useEffect(() => {
+		const onKeyDown = (e) => {
+			if (e.key !== 'Escape') return;
+			if (showCart) { setShowCart(false); return; }
+			if (selectedProduct) { setSelectedProduct(null); return; }
+			if (showAnalytics) setShowAnalytics(false);
+		};
+		document.addEventListener('keydown', onKeyDown);
+		return () => document.removeEventListener('keydown', onKeyDown);
+	}, [showCart, selectedProduct, showAnalytics]);
+
 	if (!user) {
 		// Handle different auth views
 		if (authView === 'forgot-password') {
@@ -172,6 +228,7 @@ export default function App() {
 				password={password}
 				email={email}
 				authError={authError}
+				authSuccess={authSuccess}
 				authLoading={authLoading}
 				onUsernameChange={e => setUsername(e.target.value)}
 				onPasswordChange={e => setPassword(e.target.value)}
@@ -196,10 +253,8 @@ export default function App() {
 			/>
 
 			<div className="heading-container">
-				<h1>🛍️ Ecommerce Search Engine</h1>
-				<p className='main-heading'>
-					Welcome, <strong>{user.username}</strong>! You are in Group <strong>{user.group}</strong>
-				</p>
+				<h1>{getGreeting()}, {user.username}!</h1>
+				<p className='main-heading'>Discover great products, tailored for you.</p>
 			</div>
 
 			{/* Analytics Dashboard Modal */}
@@ -207,7 +262,7 @@ export default function App() {
 				<div className="modal-overlay" onClick={() => setShowAnalytics(false)}>
 					<div className="analytics-modal" onClick={e => e.stopPropagation()}>
 						<button className="modal-close" onClick={() => setShowAnalytics(false)}>✕</button>
-						<AnalyticsDashboard />
+						<AnalyticsDashboard user={user} />
 					</div>
 				</div>
 			)}
@@ -230,20 +285,24 @@ export default function App() {
 			{/* Toast Notification */}
 			<Toast toast={toast} />
 			{/* Admin Cache Manager (only visible to admins) */}
-			<AdminCacheManager user={user} onAdminConfirmed={() => setIsAdmin(true)} />
+			<AdminCacheManager user={user} />
+			{/* Admin Product Manager (only visible to admins) */}
+			<AdminProductManager user={user} />
 			{/* Product Detail Modal */}
 			<ProductModal
 				product={selectedProduct}
 				onClose={() => setSelectedProduct(null)}
+				onCartUpdate={handleCartUpdate}
+				cartQuantity={selectedProduct ? getCartQuantity(selectedProduct.product_id) : 0}
+				user={user}
 			/>
 
-			{/* ✅ WHITE CONTENT CARD */}
 			<main className="container">
 				<form className="search-bar global-search" onSubmit={search}>
 					<input
 						value={query}
 						onChange={(e) => setQuery(e.target.value)}
-						placeholder="Search products"
+						placeholder="Search for laptops, headphones, cameras..."
 						disabled={searchLoading}
 					/>
 					<button disabled={searchLoading}>
@@ -254,13 +313,25 @@ export default function App() {
 					{/* ---------- SEARCH RESULTS ---------- */}
 					{searchLoading && (
 						<section>
-							<h3>Search Results</h3>
+							<h3>🔍 Search Results</h3>
 							<Loading>Searching...</Loading>
 						</section>
 					)}
 					{!searchLoading && results !== null && (
 						<section>
-							<h3>Search Results ({filteredResults.length} products)</h3>
+							<h3>
+							🔍 Search Results ({filtersActive
+								? `${filteredResults.length} matching filters, out of ${totalMatches} total`
+								: `${totalMatches} products`})
+						</h3>
+							{appliedIntent && appliedIntent.length > 0 && (
+								<div className="intent-chips">
+									<span className="intent-chips-label">Interpreted as:</span>
+									{appliedIntent.map((chip, i) => (
+										<span key={i} className={`intent-chip intent-chip-${chip.kind}`}>{chip.label}</span>
+									))}
+								</div>
+							)}
 
 							{/* Filters and Sort */}
 							<FiltersBar
@@ -273,15 +344,16 @@ export default function App() {
 								setMaxPrice={setMaxPrice}
 								sortBy={sortBy}
 								setSortBy={setSortBy}
+								onClearFilters={clearFilters}
 							/>
 
 							{filteredResults.length === 0 ? (
-								<EmptyState>No products found. Try adjusting filters!</EmptyState>
+								<EmptyState icon="🔍">No products found. Try adjusting your filters!</EmptyState>
 							) : (
 								<>
 									<ProductGrid
 										products={paginatedResults}
-										userId={user.user_id}
+										token={user.token}
 										query={query}
 										onCartUpdate={handleCartUpdate}
 										onProductClick={setSelectedProduct}
@@ -309,16 +381,16 @@ export default function App() {
 
 					{/* ---------- RECENTLY VIEWED ---------- */}
 					<section>
-						<h3>Recently Viewed</h3>
+						<h3>🕐 Recently Viewed</h3>
 						{recsLoading ? (
-							<Loading />
+							<SkeletonGrid count={8} />
 						) : (
 							recent.length === 0 ? (
-								<EmptyState>No recent products.</EmptyState>
+								<EmptyState icon="👀">No recently viewed products yet.</EmptyState>
 							) : (
 								<ProductGrid
 									products={recent}
-									userId={user.user_id}
+									token={user.token}
 									query=""
 									onCartUpdate={handleCartUpdate}
 									onProductClick={setSelectedProduct}
@@ -330,16 +402,16 @@ export default function App() {
 
 					{/* ---------- RECOMMENDED ---------- */}
 					<section>
-						<h3>Recommended For You</h3>
+						<h3>✨ Recommended For You</h3>
 						{recsLoading ? (
-							<Loading />
+							<SkeletonGrid count={8} />
 						) : (
 							recommended.length === 0 ? (
-								<EmptyState>No recommendations yet.</EmptyState>
+								<EmptyState icon="✨">No recommendations yet — search for a few products first!</EmptyState>
 							) : (
 								<ProductGrid
 									products={recommended}
-									userId={user.user_id}
+									token={user.token}
 									query=""
 									isRecommendation
 									onCartUpdate={handleCartUpdate}

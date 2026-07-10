@@ -67,7 +67,7 @@ def invalidate_product_search_cache(query: str) -> bool:
         deleted += _delete_by_pattern(f"search_ranked:{key_hash}:*")
         if deleted:
             try:
-                _redis.incrby(_INVALIDATIONS_KEY, deleted)
+                _redis.incr(_INVALIDATIONS_KEY)  # count operations, not keys
             except Exception:
                 pass
         return deleted > 0
@@ -80,7 +80,7 @@ def invalidate_all_search_caches() -> int:
     """
     Invalidate ALL search caches.
     Use sparingly - expensive operation.
-    
+
     Returns: Number of keys deleted
     """
     try:
@@ -89,7 +89,7 @@ def invalidate_all_search_caches() -> int:
         deleted += _delete_by_pattern("search_ranked:*")
         if deleted:
             try:
-                _redis.incrby(_INVALIDATIONS_KEY, deleted)
+                _redis.incr(_INVALIDATIONS_KEY)  # count operations, not keys
             except Exception:
                 pass
         logger.info(f"Invalidated {deleted} search cache keys")
@@ -103,7 +103,7 @@ def invalidate_all_recommendation_caches() -> int:
     """
     Invalidate ALL recommendation caches.
     Use when user preferences change globally.
-    
+
     Returns: Number of keys deleted
     """
     try:
@@ -111,7 +111,7 @@ def invalidate_all_recommendation_caches() -> int:
         deleted = _delete_by_pattern(pattern)
         if deleted:
             try:
-                _redis.incrby(_INVALIDATIONS_KEY, deleted)
+                _redis.incr(_INVALIDATIONS_KEY)  # count operations, not keys
             except Exception:
                 pass
         logger.info(f"Invalidated {deleted} recommendation cache keys")
@@ -154,13 +154,20 @@ def invalidate_on_user_event(user_id: str, event_type: str, cluster_id: Optional
     if event_type in ["add_to_cart", "purchase", "click"]:
         # Always invalidate user's recommendations
         results.append(invalidate_user_recommendations(user_id))
-        
+
+        # Invalidate recent-boost cache so new event is reflected immediately
+        try:
+            deleted = _redis.delete(f"recent_boost:{user_id}")
+            results.append(bool(deleted))
+        except Exception:
+            pass
+
         # Invalidate cluster boost if user is in a cluster
         if cluster_id is not None:
             results.append(invalidate_cluster_boost(cluster_id))
-        
+
         logger.info(f"Invalidated caches for user {user_id} event: {event_type}")
-    
+
     return any(results)
 
 
