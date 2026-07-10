@@ -187,6 +187,27 @@ class TestSubmitReviewService:
         session.query.return_value.filter.return_value.one.return_value = (4.5, 2)
         return session
 
+    def test_locks_product_row_before_recomputing_aggregate(self):
+        """Regression test: recompute_product_aggregate must lock the
+        product row (SELECT ... FOR UPDATE) before reading the aggregate,
+        otherwise two concurrent reviews on the same product race — each
+        computes from a snapshot missing the other's uncommitted insert,
+        and the later commit silently overwrites the earlier one's
+        contribution to rating/review_count."""
+        from backend.services.review.create import submit_review
+        session = self._mock_session()
+        with patch("backend.services.review.create.get_db_session", return_value=session):
+            submit_review(1, "u1", 5, None)
+
+        # with_for_update() must be called on the Product query, and it
+        # must happen before the aggregate SELECT (.one()) is issued.
+        lock_call = session.query.return_value.filter.return_value.with_for_update
+        lock_call.assert_called_once()
+        call_names = [str(c[0]) for c in session.mock_calls]
+        lock_index = next(i for i, name in enumerate(call_names) if name.endswith('with_for_update'))
+        one_index = next(i for i, name in enumerate(call_names) if name.endswith('.one'))
+        assert lock_index < one_index
+
     def test_resubmitting_upserts_not_duplicates(self):
         """Calling submit_review twice for the same (product, user) must
         hit on_conflict_do_update, not create two rows — this is what makes

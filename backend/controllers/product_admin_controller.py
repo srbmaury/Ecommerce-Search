@@ -1,4 +1,5 @@
 import logging
+import math
 
 from backend.services.db_product_service import (
     get_products_paginated,
@@ -25,6 +26,12 @@ def _validate_price(raw_price):
         price = float(raw_price)
     except (TypeError, ValueError):
         return None, error_response("price must be a number")
+    # float() accepts "nan"/"inf"/"infinity" as valid strings, and NaN
+    # compares False to everything (nan <= 0 is False), so those would
+    # otherwise sail past the positivity check below and get stored as-is —
+    # poisoning price sort/filter and any cart total that includes them.
+    if not math.isfinite(price):
+        return None, error_response("price must be a finite number")
     if price <= 0:
         return None, error_response("price must be a positive number")
     return price, None

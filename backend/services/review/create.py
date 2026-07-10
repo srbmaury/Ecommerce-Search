@@ -2,7 +2,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from backend.utils.database import get_db_session
 from backend.models import Review, utcnow
-from backend.services.review.aggregate import recompute_product_aggregate
+from backend.services.review.aggregate import lock_product_for_review_write, recompute_product_aggregate
 
 
 def submit_review(product_id, user_id, rating, comment):
@@ -12,6 +12,7 @@ def submit_review(product_id, user_id, rating, comment):
     """
     session = get_db_session()
     try:
+        lock_product_for_review_write(session, product_id)
         insert_fn = pg_insert if session.bind.dialect.name == "postgresql" else sqlite_insert
         stmt = insert_fn(Review).values(
             product_id=product_id, user_id=user_id, rating=rating, comment=comment,

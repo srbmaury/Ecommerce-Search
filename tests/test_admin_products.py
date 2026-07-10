@@ -106,6 +106,18 @@ class TestCreateProductController:
         from backend.controllers.product_admin_controller import create_product_controller
         resp, status = create_product_controller({"title": "Widget", "price": 0})
         assert status == 400
+
+    def test_nan_price_rejected(self):
+        """nan <= 0 is False, so NaN would otherwise slip past the
+        positivity check and get stored as-is."""
+        from backend.controllers.product_admin_controller import create_product_controller
+        resp, status = create_product_controller({"title": "Widget", "price": "nan"})
+        assert status == 400
+
+    def test_infinite_price_rejected(self):
+        from backend.controllers.product_admin_controller import create_product_controller
+        resp, status = create_product_controller({"title": "Widget", "price": "inf"})
+        assert status == 400
         resp, status = create_product_controller({"title": "Widget", "price": -5})
         assert status == 400
 
