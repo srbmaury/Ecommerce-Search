@@ -81,7 +81,7 @@ graph TB
 
 # 📌 Overview
 
-A production-ready, ML-powered ecommerce search engine designed to simulate real-world search, personalization, and ranking systems used in modern ecommerce platforms.
+A deployed, ML-powered ecommerce search engine for exploring real-world search, personalization, and ranking patterns used in modern ecommerce systems.
 
 This system integrates:
 
@@ -116,6 +116,7 @@ It is built to demonstrate **scalability, personalization, and system design bes
 - TailwindCSS-inspired UI
 
 ## Machine Learning
+- LightGBM (learning-to-rank)
 - scikit-learn
 - pandas
 - NumPy
